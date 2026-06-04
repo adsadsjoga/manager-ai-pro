@@ -56,7 +56,7 @@ export default function ReportsPage() {
           ].map((item) => (
             <a key={item.href} href={item.href}
               className={`block px-4 py-2.5 rounded-lg text-sm font-medium transition-colors
-                ${(item as any).active ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}>
+                {item.active ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}>
               {item.label}
             </a>
           ))}
@@ -173,8 +173,8 @@ export default function ReportsPage() {
             {/* Métricas do relatório */}
             <div className="grid grid-cols-4 gap-3 mb-4">
               {[
-                { label: 'Investimento', value: `R$${metrics.spend.toLocaleString('pt-BR', {minimumFractionDigits:2})}` },
-                { label: 'Receita', value: `R$${metrics.revenue.toLocaleString('pt-BR', {minimumFractionDigits:2})}` },
+                { label: 'Investimento', value: `€${metrics.spend.toLocaleString('pt-PT', {minimumFractionDigits:2})}` },
+                { label: 'Receita', value: `€${metrics.revenue.toLocaleString('pt-PT', {minimumFractionDigits:2})}` },
                 { label: 'ROAS', value: `${metrics.roas}x` },
                 { label: 'Leads', value: String(metrics.leads) },
               ].map(m => (
@@ -188,8 +188,8 @@ export default function ReportsPage() {
             <div className="grid grid-cols-4 gap-3 mb-4">
               {[
                 { label: 'CTR', value: `${metrics.ctr}%` },
-                { label: 'CPC', value: `R$${metrics.cpc}` },
-                { label: 'CPM', value: `R$${metrics.cpm}` },
+                { label: 'CPC', value: `€${metrics.cpc}` },
+                { label: 'CPM', value: `€${metrics.cpm}` },
                 { label: 'Compras', value: String(metrics.purchases) },
               ].map(m => (
                 <div key={m.label} className="bg-gray-800 rounded-lg p-3 text-center">
@@ -208,8 +208,8 @@ export default function ReportsPage() {
                   <p className="text-xs text-gray-300 mt-1">
                     A conta teve ROAS geral de 3.29x no período, acima da média do setor (2.5x).
                     A campanha de Remarketing foi a grande destaque com ROAS 5.2x.
-                    Recomenda-se pausar "Tráfego - Blog" e realocar o budget para Remarketing.
-                    Potencial de aumentar receita em ~R$3.200/mês com os ajustes sugeridos.
+                    Recomenda-se pausar &quot;Tráfego - Blog&quot; e realocar o budget para Remarketing.
+                    Potencial de aumentar receita em ~€3.200/mês com os ajustes sugeridos.
                   </p>
                 </div>
               </div>

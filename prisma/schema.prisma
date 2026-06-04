@@ -52,7 +52,7 @@ model AdAccount {
   platform         String    @default("facebook")
   accountId        String
   accountName      String?
-  currency         String    @default("BRL")
+  currency         String    @default("EUR")
   timezone         String    @default("America/Sao_Paulo")
   windsorConnected Boolean   @default(false)
   lastSyncAt       DateTime?

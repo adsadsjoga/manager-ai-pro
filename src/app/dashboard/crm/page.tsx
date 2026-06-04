@@ -23,7 +23,7 @@ const initialLeads: Lead[] = [
   { id: '4', name: 'Fernanda Lima', email: 'fernanda@gmail.com', campaign: 'Retro - Remarketing', platform: 'Facebook', value: 890, stage: 'contacted', date: 'Ontem, 10:20' },
   { id: '5', name: 'Marcos Oliveira', email: 'marcos@outlook.com', phone: '(41) 96666-5555', campaign: 'Retro - Conversão - Camisetas', platform: 'Instagram', value: 420, stage: 'qualified', date: '2 dias atrás' },
   { id: '6', name: 'Juliana Santos', email: 'juliana@gmail.com', phone: '(51) 95555-6666', campaign: 'Retro - Remarketing', platform: 'Facebook', value: 1200, stage: 'qualified', date: '2 dias atrás', notes: 'Interesse em kit completo' },
-  { id: '7', name: 'Pedro Alves', email: 'pedro@empresa.com', campaign: 'Retro - Conversão - Camisetas', platform: 'Instagram', value: 650, stage: 'proposal', date: '3 dias atrás', notes: 'Proposta enviada: R$650' },
+  { id: '7', name: 'Pedro Alves', email: 'pedro@empresa.com', campaign: 'Retro - Conversão - Camisetas', platform: 'Instagram', value: 650, stage: 'proposal', date: '3 dias atrás', notes: 'Proposta enviada: €650' },
   { id: '8', name: 'Beatriz Rocha', email: 'beatriz@gmail.com', phone: '(62) 94444-7777', campaign: 'Retro - Remarketing', platform: 'Facebook', value: 980, stage: 'won', date: '4 dias atrás' },
   { id: '9', name: 'Diego Ferreira', email: 'diego@hotmail.com', campaign: 'Retro - Prospecting - Frio', platform: 'Facebook', value: 200, stage: 'lost', date: '5 dias atrás', notes: 'Achou caro' },
 ]
@@ -77,7 +77,7 @@ export default function CRMPage() {
           ].map((item) => (
             <a key={item.href} href={item.href}
               className={`block px-4 py-2.5 rounded-lg text-sm font-medium transition-colors
-                ${(item as any).active ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}>
+                {item.active ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}>
               {item.label}
             </a>
           ))}
@@ -110,8 +110,8 @@ export default function CRMPage() {
           {[
             { label: 'Total de leads', value: String(leads.length), color: 'text-white' },
             { label: 'Em negociação', value: String(leads.filter(l=>!['won','lost'].includes(l.stage)).length), color: 'text-indigo-400' },
-            { label: 'Valor no pipeline', value: `R$${pipelineValue.toLocaleString('pt-BR')}`, color: 'text-yellow-400' },
-            { label: 'Receita fechada', value: `R$${totalValue.toLocaleString('pt-BR')}`, color: 'text-green-400' },
+            { label: 'Valor no pipeline', value: `€${pipelineValue.toLocaleString('pt-PT')}`, color: 'text-yellow-400' },
+            { label: 'Receita fechada', value: `€${totalValue.toLocaleString('pt-PT')}`, color: 'text-green-400' },
           ].map(m => (
             <div key={m.label} className="bg-gray-900 border border-gray-800 rounded-xl p-4">
               <p className="text-gray-400 text-xs uppercase tracking-wide">{m.label}</p>
@@ -153,11 +153,11 @@ export default function CRMPage() {
                     <p className="font-medium text-sm">{lead.name}</p>
                     <p className="text-gray-400 text-xs truncate">{lead.email}</p>
                     <div className="flex items-center justify-between mt-2">
-                      <span className="text-green-400 text-xs font-medium">R${lead.value.toLocaleString('pt-BR')}</span>
+                      <span className="text-green-400 text-xs font-medium">€{lead.value.toLocaleString('pt-PT')}</span>
                       <span className="text-gray-500 text-xs">{lead.date}</span>
                     </div>
                     {lead.notes && (
-                      <p className="text-xs text-gray-500 mt-1 italic truncate">"{lead.notes}"</p>
+                      <p className="text-xs text-gray-500 mt-1 italic truncate">&quot;{lead.notes}&quot;</p>
                     )}
                   </div>
                 ))}
@@ -195,7 +195,7 @@ export default function CRMPage() {
               </div>
               <div className="bg-gray-800 rounded-lg p-3">
                 <p className="text-gray-400 text-xs">Valor estimado</p>
-                <p className="text-green-400 font-bold text-lg">R${selected.value.toLocaleString('pt-BR')}</p>
+                <p className="text-green-400 font-bold text-lg">€{selected.value.toLocaleString('pt-PT')}</p>
               </div>
               {selected.notes && (
                 <div className="bg-gray-800 rounded-lg p-3">

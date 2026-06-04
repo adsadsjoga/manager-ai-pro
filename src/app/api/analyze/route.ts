@@ -1,63 +1,189 @@
+import { auth } from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
-import Anthropic from '@anthropic-ai/sdk'
+import { DEFAULT_ALERT_RULES, evaluateAlertRules } from '@/lib/alert-engine'
+import { analyzeCampaigns, type CampaignForAnalysis } from '@/lib/campaign-analysis'
+import { prisma } from '@/lib/prisma'
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-
-const SYSTEM_PROMPT = `Você é um especialista sênior em Facebook Ads com 10+ anos de experiência.
-
-Analise as campanhas fornecidas e retorne um JSON com este formato exato:
-{
-  "health_score": número de 0 a 100,
-  "summary": "resumo executivo em 2 frases",
-  "alerts": ["alerta 1", "alerta 2"],
-  "opportunities": ["oportunidade 1", "oportunidade 2"],
-  "recommendations": [
-    { "priority": "high|medium|low", "action": "ação específica", "campaign": "nome da campanha", "expected_impact": "impacto esperado" }
-  ]
+type AnalyzeBody = {
+  campaigns?: CampaignForAnalysis[]
 }
 
-Benchmarks: ROAS bom > 2.5x, CTR bom > 1.5%, Frequência ideal < 3.5, CPM alto > R$50.
-Seja direto e prático. Retorne APENAS o JSON, sem texto adicional.`
+function parseJson(value: string | null) {
+  if (!value) return null
+
+  try {
+    return JSON.parse(value)
+  } catch {
+    return null
+  }
+}
+
+export async function GET() {
+  const { userId } = await auth()
+
+  if (!userId) {
+    return NextResponse.json(
+      { success: false, error: 'Usuario nao autenticado' },
+      { status: 401 }
+    )
+  }
+
+  const latestInsight = await prisma.aiInsight.findFirst({
+    where: {
+      adAccount: {
+        userId,
+      },
+      insightType: 'campaign_analysis',
+    },
+    orderBy: {
+      createdAt: 'desc',
+    },
+    select: {
+      id: true,
+      severity: true,
+      healthScore: true,
+      title: true,
+      summary: true,
+      fullAnalysis: true,
+      recommendations: true,
+      createdAt: true,
+      periodStart: true,
+      periodEnd: true,
+    },
+  })
+
+  return NextResponse.json({
+    success: true,
+    insight: latestInsight
+      ? {
+          ...latestInsight,
+          analysis: parseJson(latestInsight.fullAnalysis),
+        }
+      : null,
+  })
+}
 
 export async function POST(req: Request) {
-  try {
-    const { campaigns } = await req.json()
+  const { userId } = await auth()
 
-    if (!campaigns || campaigns.length === 0) {
-      return NextResponse.json({ error: 'Nenhuma campanha fornecida' }, { status: 400 })
+  if (!userId) {
+    return NextResponse.json(
+      { success: false, error: 'Usuario nao autenticado' },
+      { status: 401 }
+    )
+  }
+
+  try {
+    const body = (await req.json()) as AnalyzeBody
+    const campaigns = body.campaigns || []
+
+    if (!campaigns.length) {
+      return NextResponse.json(
+        { success: false, error: 'Nenhuma campanha enviada para analise' },
+        { status: 400 }
+      )
     }
 
-    const campaignText = campaigns.map((c: any) => `
-Campanha: ${c.name}
-- Investimento: R$${c.spend}
-- Receita: R$${c.revenue}
-- ROAS: ${c.roas}x
-- CTR: ${c.ctr}%
-- CPC: R$${c.cpc}
-- CPM: R$${c.cpm}
-- Frequência: ${c.frequency}
-- Leads: ${c.leads}
-- Compras: ${c.purchases}
-- Score de saúde atual: ${c.health}/100`).join('\n---\n')
-
-    const message = await client.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 1500,
-      system: SYSTEM_PROMPT,
-      messages: [{
-        role: 'user',
-        content: `Analise estas ${campaigns.length} campanhas da conta "Retro Mundial Ads":\n\n${campaignText}`
-      }]
+    const adAccount = await prisma.adAccount.findFirst({
+      where: { userId },
+      orderBy: { updatedAt: 'desc' },
     })
 
-    const raw = (message.content[0] as any).text
-    const jsonMatch = raw.match(/\{[\s\S]*\}/)
-    const analysis = jsonMatch ? JSON.parse(jsonMatch[0]) : { health_score: 50, summary: raw, alerts: [], opportunities: [], recommendations: [] }
+    if (!adAccount) {
+      return NextResponse.json(
+        { success: false, error: 'Nenhuma conta de anuncios encontrada' },
+        { status: 404 }
+      )
+    }
 
-    return NextResponse.json({ success: true, analysis })
+    const analysis = analyzeCampaigns(campaigns)
+    const alertRules = await prisma.alertRule.findMany({
+      where: {
+        userId,
+        isActive: true,
+      },
+    })
+    const ruleAlerts = evaluateAlertRules(
+      campaigns,
+      alertRules.length
+        ? alertRules
+        : DEFAULT_ALERT_RULES.map((rule) => ({
+            ...rule,
+            notifyEmail: true,
+            isActive: true,
+          }))
+    )
+    const generatedAlerts = [...analysis.generatedAlerts, ...ruleAlerts].filter(
+      (alert, index, allAlerts) =>
+        allAlerts.findIndex(
+          (item) =>
+            item.alertType === alert.alertType &&
+            item.campaignName === alert.campaignName &&
+            item.severity === alert.severity
+        ) === index
+    )
+    const persistedAnalysis = {
+      ...analysis,
+      generatedAlerts,
+    }
+    const periodEnd = new Date()
+    const periodStart = new Date(periodEnd.getTime() - 30 * 86400000)
 
-  } catch (error: any) {
-    console.error('AI Error:', error)
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+    await prisma.$transaction(async (tx) => {
+      await tx.aiInsight.create({
+        data: {
+          adAccountId: adAccount.id,
+          insightType: 'campaign_analysis',
+          severity:
+            persistedAnalysis.health_score < 50
+              ? 'critical'
+              : persistedAnalysis.health_score < 70
+                ? 'warning'
+                : 'info',
+          healthScore: persistedAnalysis.health_score,
+          title: 'Analise automatica de campanhas',
+          summary: persistedAnalysis.summary,
+          fullAnalysis: JSON.stringify(persistedAnalysis),
+          recommendations: persistedAnalysis.recommendations,
+          metricsSnapshot: campaigns,
+          periodStart,
+          periodEnd,
+        },
+      })
+
+      await tx.alert.deleteMany({
+        where: {
+          adAccountId: adAccount.id,
+          isResolved: false,
+        },
+      })
+
+      if (generatedAlerts.length) {
+        await tx.alert.createMany({
+          data: generatedAlerts.map((alert) => ({
+            adAccountId: adAccount.id,
+            alertType: alert.alertType,
+            severity: alert.severity,
+            title: alert.title,
+            message: alert.message,
+            metrics: alert.metrics,
+            campaignName: alert.campaignName,
+            isRead: alert.severity === 'info',
+          })),
+        })
+      }
+    })
+
+    return NextResponse.json({
+      success: true,
+      analysis: persistedAnalysis,
+    })
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Erro inesperado'
+
+    return NextResponse.json(
+      { success: false, error: message },
+      { status: 500 }
+    )
   }
 }
