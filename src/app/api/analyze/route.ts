@@ -1,6 +1,10 @@
 import { auth } from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
-import { DEFAULT_ALERT_RULES, evaluateAlertRules } from '@/lib/alert-engine'
+import {
+  DEFAULT_ALERT_RULES,
+  evaluateAlertRules,
+  persistAlertsWithCooldown,
+} from '@/lib/alert-engine'
 import { analyzeCampaigns, type CampaignForAnalysis } from '@/lib/campaign-analysis'
 import { prisma } from '@/lib/prisma'
 
@@ -103,16 +107,19 @@ export async function POST(req: Request) {
         isActive: true,
       },
     })
-    const ruleAlerts = evaluateAlertRules(
-      campaigns,
-      alertRules.length
-        ? alertRules
-        : DEFAULT_ALERT_RULES.map((rule) => ({
-            ...rule,
-            notifyEmail: true,
-            isActive: true,
-          }))
-    )
+    const effectiveRules = alertRules.length
+      ? alertRules
+      : DEFAULT_ALERT_RULES.map((rule) => ({
+          ...rule,
+          name: rule.name,
+          metric: rule.metric,
+          operator: rule.operator,
+          threshold: rule.threshold,
+          severity: rule.severity,
+          cooldownHours: rule.cooldownHours,
+          notifyEmail: true,
+        }))
+    const ruleAlerts = evaluateAlertRules(campaigns, effectiveRules)
     const generatedAlerts = [...analysis.generatedAlerts, ...ruleAlerts].filter(
       (alert, index, allAlerts) =>
         allAlerts.findIndex(
@@ -129,54 +136,37 @@ export async function POST(req: Request) {
     const periodEnd = new Date()
     const periodStart = new Date(periodEnd.getTime() - 30 * 86400000)
 
-    await prisma.$transaction(async (tx) => {
-      await tx.aiInsight.create({
-        data: {
-          adAccountId: adAccount.id,
-          insightType: 'campaign_analysis',
-          severity:
-            persistedAnalysis.health_score < 50
-              ? 'critical'
-              : persistedAnalysis.health_score < 70
-                ? 'warning'
-                : 'info',
-          healthScore: persistedAnalysis.health_score,
-          title: 'Analise automatica de campanhas',
-          summary: persistedAnalysis.summary,
-          fullAnalysis: JSON.stringify(persistedAnalysis),
-          recommendations: persistedAnalysis.recommendations,
-          metricsSnapshot: campaigns,
-          periodStart,
-          periodEnd,
-        },
-      })
+    await prisma.aiInsight.create({
+      data: {
+        adAccountId: adAccount.id,
+        insightType: 'campaign_analysis',
+        severity:
+          persistedAnalysis.health_score < 50
+            ? 'critical'
+            : persistedAnalysis.health_score < 70
+              ? 'warning'
+              : 'info',
+        healthScore: persistedAnalysis.health_score,
+        title: 'Analise automatica de campanhas',
+        summary: persistedAnalysis.summary,
+        fullAnalysis: JSON.stringify(persistedAnalysis),
+        recommendations: persistedAnalysis.recommendations,
+        metricsSnapshot: campaigns,
+        periodStart,
+        periodEnd,
+      },
+    })
 
-      await tx.alert.deleteMany({
-        where: {
-          adAccountId: adAccount.id,
-          isResolved: false,
-        },
-      })
-
-      if (generatedAlerts.length) {
-        await tx.alert.createMany({
-          data: generatedAlerts.map((alert) => ({
-            adAccountId: adAccount.id,
-            alertType: alert.alertType,
-            severity: alert.severity,
-            title: alert.title,
-            message: alert.message,
-            metrics: alert.metrics,
-            campaignName: alert.campaignName,
-            isRead: alert.severity === 'info',
-          })),
-        })
-      }
+    const createdAlerts = await persistAlertsWithCooldown(prisma, {
+      adAccountId: adAccount.id,
+      alerts: generatedAlerts,
+      rules: effectiveRules,
     })
 
     return NextResponse.json({
       success: true,
       analysis: persistedAnalysis,
+      alertsCreated: createdAlerts.length,
     })
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Erro inesperado'

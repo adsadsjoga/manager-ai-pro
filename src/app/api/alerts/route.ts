@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
 type PatchBody = {
-  action?: 'mark-read' | 'mark-all-read'
+  action?: 'mark-read' | 'mark-all-read' | 'resolve' | 'resolve-all'
   id?: string
 }
 
@@ -63,6 +63,24 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ success: true })
   }
 
+  if (body.action === 'resolve-all') {
+    await prisma.alert.updateMany({
+      where: {
+        adAccount: {
+          userId,
+        },
+        isResolved: false,
+      },
+      data: {
+        isRead: true,
+        isResolved: true,
+        resolvedAt: new Date(),
+      },
+    })
+
+    return NextResponse.json({ success: true })
+  }
+
   if (body.action === 'mark-read' && body.id) {
     await prisma.alert.updateMany({
       where: {
@@ -73,6 +91,24 @@ export async function PATCH(req: Request) {
       },
       data: {
         isRead: true,
+      },
+    })
+
+    return NextResponse.json({ success: true })
+  }
+
+  if (body.action === 'resolve' && body.id) {
+    await prisma.alert.updateMany({
+      where: {
+        id: body.id,
+        adAccount: {
+          userId,
+        },
+      },
+      data: {
+        isRead: true,
+        isResolved: true,
+        resolvedAt: new Date(),
       },
     })
 

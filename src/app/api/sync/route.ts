@@ -1,5 +1,6 @@
 import { auth, currentUser } from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
+import { runAlertAutomationForAccount } from '@/lib/alert-automation'
 import { prisma } from '@/lib/prisma'
 import {
   fetchFacebookAdsData,
@@ -258,6 +259,12 @@ export async function GET(req: Request) {
       },
     })
 
+    const alertAutomation = await runAlertAutomationForAccount({
+      userId: user.id,
+      adAccountId: adAccount.id,
+      lookbackDays: 7,
+    })
+
     return NextResponse.json({
       success: true,
       userId: user.id,
@@ -266,6 +273,7 @@ export async function GET(req: Request) {
       dateTo,
       rowsFetched: rows.length,
       rowsInserted: inserted,
+      alertAutomation,
     })
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Erro inesperado'

@@ -1,4 +1,5 @@
-import type { AlertRule } from '@prisma/client'
+import type { PrismaClient, AlertRule } from '@prisma/client'
+import { sendAlertEmail } from '@/lib/email-notifications'
 import type { CampaignForAnalysis, GeneratedAlert } from '@/lib/campaign-analysis'
 
 export type DefaultAlertRule = {
@@ -124,7 +125,13 @@ export const DEFAULT_ALERT_RULES: DefaultAlertRule[] = [
 
 type RuleLike = Pick<
   AlertRule,
-  'name' | 'metric' | 'operator' | 'threshold' | 'severity' | 'cooldownHours'
+  | 'name'
+  | 'metric'
+  | 'operator'
+  | 'threshold'
+  | 'severity'
+  | 'cooldownHours'
+  | 'notifyEmail'
 >
 
 function compare(value: number, operator: string | null, threshold: number) {
@@ -205,4 +212,90 @@ export function evaluateAlertRules(
   }
 
   return alerts
+}
+
+export async function persistAlertsWithCooldown(
+  prisma: PrismaClient,
+  params: {
+    adAccountId: string
+    alerts: GeneratedAlert[]
+    rules: RuleLike[]
+  }
+) {
+  const created = []
+  const now = new Date()
+
+  const adAccount = await prisma.adAccount.findUnique({
+    where: { id: params.adAccountId },
+    select: {
+      accountName: true,
+      user: {
+        select: {
+          email: true,
+        },
+      },
+    },
+  })
+
+  for (const alert of params.alerts) {
+    const rule = params.rules.find((item) => item.metric === alert.alertType)
+    const cooldownHours = rule?.cooldownHours ?? 4
+    const cooldownUntil = new Date(now.getTime() + cooldownHours * 60 * 60 * 1000)
+    const shouldNotifyEmail =
+      (rule?.notifyEmail ?? true) &&
+      ['critical', 'warning'].includes(alert.severity) &&
+      Boolean(adAccount?.user.email)
+
+    const existing = await prisma.alert.findFirst({
+      where: {
+        adAccountId: params.adAccountId,
+        alertType: alert.alertType,
+        campaignName: alert.campaignName,
+        isResolved: false,
+        OR: [{ cooldownUntil: null }, { cooldownUntil: { gt: now } }],
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+      select: {
+        id: true,
+      },
+    })
+
+    if (existing) continue
+
+    const emailResult = shouldNotifyEmail
+      ? await sendAlertEmail({
+          to: adAccount?.user.email || '',
+          accountName: adAccount?.accountName,
+          severity: alert.severity,
+          title: alert.title,
+          message: alert.message,
+          campaignName: alert.campaignName,
+        })
+      : { sent: false, reason: 'Email desativado para esta regra' }
+
+    const saved = await prisma.alert.create({
+      data: {
+        adAccountId: params.adAccountId,
+        alertType: alert.alertType,
+        severity: alert.severity,
+        title: alert.title,
+        message: alert.message,
+        metrics: {
+          ...alert.metrics,
+          notifyEmail: rule?.notifyEmail ?? true,
+          emailSent: emailResult.sent,
+          emailStatus: emailResult.sent ? 'sent' : emailResult.reason,
+        },
+        campaignName: alert.campaignName,
+        cooldownUntil,
+        isRead: alert.severity === 'info',
+      },
+    })
+
+    created.push(saved)
+  }
+
+  return created
 }

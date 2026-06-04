@@ -1,23 +1,7 @@
 import { auth } from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
+import { summarizeCampaigns } from '@/lib/campaign-metrics'
 import { prisma } from '@/lib/prisma'
-
-type CampaignSummary = {
-  name: string
-  spend: number
-  revenue: number
-  leads: number
-  purchases: number
-  clicks: number
-  impressions: number
-  ctr: number
-  cpc: number
-  cpm: number
-  roas: number
-  frequency: number
-  conversionRate: number
-  health: number
-}
 
 function parseDateParam(value: string | null) {
   if (!value) return null
@@ -96,79 +80,7 @@ export async function GET(req: Request) {
     }
   )
 
-  const campaignsMap = new Map<string, CampaignSummary>()
-
-  for (const item of filteredMetrics) {
-    const key = item.campaignName || item.adName || 'Sem campanha'
-
-    if (!campaignsMap.has(key)) {
-      campaignsMap.set(key, {
-        name: key,
-        spend: 0,
-        revenue: 0,
-        leads: 0,
-        purchases: 0,
-        clicks: 0,
-        impressions: 0,
-        ctr: 0,
-        cpc: 0,
-        cpm: 0,
-        roas: 0,
-        frequency: 0,
-        conversionRate: 0,
-        health: 50,
-      })
-    }
-
-    const campaign = campaignsMap.get(key)
-    if (!campaign) continue
-
-    campaign.spend += item.spend
-    campaign.revenue += item.revenue
-    campaign.leads += item.leads
-    campaign.purchases += item.purchases
-    campaign.clicks += item.clicks
-    campaign.impressions += item.impressions
-    campaign.frequency += item.frequency
-  }
-
-  const campaigns = Array.from(campaignsMap.values()).map((campaign) => {
-    campaign.ctr =
-      campaign.impressions > 0
-        ? (campaign.clicks / campaign.impressions) * 100
-        : 0
-
-    campaign.cpc =
-      campaign.clicks > 0
-        ? campaign.spend / campaign.clicks
-        : 0
-
-    campaign.cpm =
-      campaign.impressions > 0
-        ? (campaign.spend / campaign.impressions) * 1000
-        : 0
-
-    campaign.roas =
-      campaign.spend > 0
-        ? campaign.revenue / campaign.spend
-        : 0
-
-    campaign.conversionRate =
-      campaign.clicks > 0
-        ? (campaign.purchases / campaign.clicks) * 100
-        : 0
-
-    campaign.health =
-      campaign.purchases >= 10 ? 90 :
-      campaign.purchases >= 3 && campaign.cpc <= 0.2 ? 85 :
-      campaign.ctr >= 5 && campaign.cpc <= 0.15 ? 80 :
-      campaign.ctr >= 4 && campaign.cpc <= 0.25 ? 75 :
-      campaign.ctr >= 2 ? 60 :
-      campaign.clicks > 0 ? 45 :
-      30
-
-    return campaign
-  })
+  const campaigns = summarizeCampaigns(metrics)
 
   const purchaseBreakdown = filteredMetrics
     .filter((item) => item.purchases > 0)

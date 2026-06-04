@@ -128,6 +128,26 @@ export default function AlertsPage() {
     })
   }
 
+  async function resolveAlert(id: string) {
+    setAlerts((prev) => prev.filter((alert) => alert.id !== id))
+
+    await fetch('/api/alerts', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'resolve', id }),
+    })
+  }
+
+  async function resolveAll() {
+    setAlerts([])
+
+    await fetch('/api/alerts', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'resolve-all' }),
+    })
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-950 text-white flex items-center justify-center">
@@ -197,12 +217,20 @@ export default function AlertsPage() {
           </div>
 
           {unreadCount > 0 && (
-            <button
-              onClick={markAllRead}
-              className="border border-gray-700 hover:border-gray-500 px-4 py-2 rounded-lg text-sm text-gray-400 hover:text-white transition-colors"
-            >
-              ✓ Marcar todos como lidos
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={markAllRead}
+                className="border border-gray-700 hover:border-gray-500 px-4 py-2 rounded-lg text-sm text-gray-400 hover:text-white transition-colors"
+              >
+                ✓ Marcar todos como lidos
+              </button>
+              <button
+                onClick={resolveAll}
+                className="bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg text-sm text-gray-300 hover:text-white transition-colors"
+              >
+                Resolver todos
+              </button>
+            </div>
           )}
         </div>
 
@@ -322,14 +350,29 @@ export default function AlertsPage() {
                     )}
 
                     {alert.severity === 'critical' && (
-                      <button className="text-xs bg-red-500/20 hover:bg-red-500/40 text-red-400 px-3 py-1.5 rounded-lg transition-colors">
-                        Pausar campanha
+                      <button
+                        onClick={() => resolveAlert(alert.id)}
+                        className="text-xs bg-red-500/20 hover:bg-red-500/40 text-red-400 px-3 py-1.5 rounded-lg transition-colors"
+                      >
+                        Resolver
                       </button>
                     )}
 
                     {alert.severity === 'opportunity' && (
-                      <button className="text-xs bg-green-500/20 hover:bg-green-500/40 text-green-400 px-3 py-1.5 rounded-lg transition-colors">
-                        Escalar
+                      <button
+                        onClick={() => resolveAlert(alert.id)}
+                        className="text-xs bg-green-500/20 hover:bg-green-500/40 text-green-400 px-3 py-1.5 rounded-lg transition-colors"
+                      >
+                        Aplicado
+                      </button>
+                    )}
+
+                    {alert.severity !== 'critical' && alert.severity !== 'opportunity' && (
+                      <button
+                        onClick={() => resolveAlert(alert.id)}
+                        className="text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-1.5 rounded-lg transition-colors"
+                      >
+                        Resolver
                       </button>
                     )}
                   </div>
