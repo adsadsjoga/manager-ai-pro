@@ -34,6 +34,25 @@ type AlertRulesResponse = {
   error?: string
 }
 
+type AdAccountItem = {
+  id: string
+  platform: string
+  accountId: string
+  accountName: string | null
+  currency: string
+  timezone: string
+  windsorConnected: boolean
+  syncStatus: string
+  lastSyncAt: string | null
+}
+
+type AdAccountsResponse = {
+  success: boolean
+  accounts?: AdAccountItem[]
+  account?: AdAccountItem
+  error?: string
+}
+
 export default function SettingsPage() {
   const [windsorConfigured, setWindsorConfigured] = useState(false)
   const [anthropicConfigured, setAnthropicConfigured] = useState(false)
@@ -46,6 +65,13 @@ export default function SettingsPage() {
   const [emailReport, setEmailReport] = useState(true)
   const [reportDay, setReportDay] = useState('monday')
   const [alertRules, setAlertRules] = useState<AlertRule[]>([])
+  const [adAccounts, setAdAccounts] = useState<AdAccountItem[]>([])
+  const [newAccount, setNewAccount] = useState({
+    accountName: '',
+    accountId: '',
+    currency: 'EUR',
+    timezone: 'Europe/Lisbon',
+  })
   const [saved, setSaved] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
 
@@ -71,6 +97,14 @@ export default function SettingsPage() {
         if (!active || !data.success || !data.rules) return
 
         setAlertRules(data.rules)
+      })
+
+    fetch('/api/ad-accounts')
+      .then((res) => res.json() as Promise<AdAccountsResponse>)
+      .then((data) => {
+        if (!active || !data.success || !data.accounts) return
+
+        setAdAccounts(data.accounts)
       })
 
     return () => {
@@ -130,6 +164,95 @@ export default function SettingsPage() {
     if (severity === 'warning') return 'bg-yellow-500/20 text-yellow-400'
     if (severity === 'opportunity') return 'bg-green-500/20 text-green-400'
     return 'bg-blue-500/20 text-blue-400'
+  }
+
+  async function addAdAccount() {
+    setSaveError(null)
+
+    const res = await fetch('/api/ad-accounts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'create',
+        ...newAccount,
+      }),
+    })
+    const data = (await res.json()) as AdAccountsResponse
+
+    if (!data.success || !data.account) {
+      setSaveError(data.error || 'Erro ao adicionar conta')
+      return
+    }
+
+    setAdAccounts((current) => [data.account as AdAccountItem, ...current])
+    setNewAccount({
+      accountName: '',
+      accountId: '',
+      currency: 'EUR',
+      timezone: 'Europe/Lisbon',
+    })
+  }
+
+  async function discoverAdAccounts() {
+    setSaveError(null)
+
+    const res = await fetch('/api/ad-accounts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'discover',
+        currency: newAccount.currency,
+        timezone: newAccount.timezone,
+      }),
+    })
+    const data = (await res.json()) as AdAccountsResponse
+
+    if (!data.success || !data.accounts) {
+      setSaveError(data.error || 'Erro ao buscar contas na Windsor')
+      return
+    }
+
+    setAdAccounts(data.accounts)
+  }
+
+  async function syncAdAccount(accountId: string) {
+    setSaveError(null)
+
+    const res = await fetch(`/api/sync?accountId=${encodeURIComponent(accountId)}`)
+    const data = await res.json()
+
+    if (!data.success) {
+      setSaveError(data.error || 'Erro ao sincronizar conta')
+      return
+    }
+
+    const accountsRes = await fetch('/api/ad-accounts')
+    const accountsData = (await accountsRes.json()) as AdAccountsResponse
+    if (accountsData.success && accountsData.accounts) {
+      setAdAccounts(accountsData.accounts)
+    }
+  }
+
+  async function disconnectAdAccount(id: string) {
+    const res = await fetch('/api/ad-accounts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'disconnect', id }),
+    })
+    const data = (await res.json()) as AdAccountsResponse
+
+    if (!data.success) {
+      setSaveError(data.error || 'Erro ao desconectar conta')
+      return
+    }
+
+    setAdAccounts((current) =>
+      current.map((account) =>
+        account.id === id
+          ? { ...account, windsorConnected: false, syncStatus: 'disconnected' }
+          : account
+      )
+    )
   }
 
   return (
@@ -251,6 +374,104 @@ export default function SettingsPage() {
             <div className="mt-3 flex items-center gap-2 text-sm text-green-400">
               <span className="w-2 h-2 bg-green-400 rounded-full inline-block"></span>
               Conta conectada e sincronizando
+            </div>
+          </section>
+
+          <section className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+            <div className="flex items-start justify-between gap-4 mb-4">
+              <div>
+                <h2 className="font-semibold">Multi-contas Facebook</h2>
+                <p className="text-gray-400 text-sm mt-1">
+                  Busque as contas disponiveis na Windsor.ai ou adicione um Account ID manualmente.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="bg-indigo-500/20 text-indigo-300 text-xs px-2 py-1 rounded-full">
+                  {adAccounts.filter((account) => account.windsorConnected).length} conectadas
+                </span>
+                <button
+                  type="button"
+                  onClick={discoverAdAccounts}
+                  className="bg-green-500/20 hover:bg-green-500/30 text-green-400 px-3 py-1.5 rounded-lg text-xs font-medium"
+                >
+                  Buscar contas
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-[minmax(0,1fr)_160px_110px] gap-3 mb-4">
+              <input
+                value={newAccount.accountName}
+                onChange={(event) =>
+                  setNewAccount({ ...newAccount, accountName: event.target.value })
+                }
+                placeholder="Nome da conta"
+                className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm"
+              />
+              <input
+                value={newAccount.accountId}
+                onChange={(event) =>
+                  setNewAccount({ ...newAccount, accountId: event.target.value })
+                }
+                placeholder="Account ID"
+                className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm"
+              />
+              <button
+                type="button"
+                onClick={addAdAccount}
+                className="bg-indigo-600 hover:bg-indigo-700 rounded-lg text-sm font-medium"
+              >
+                Adicionar
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {adAccounts.map((account, index) => (
+                <div
+                  key={`${account.id}-${account.accountId}-${index}`}
+                  className="grid grid-cols-[minmax(0,1fr)_110px_120px_96px_110px] gap-3 items-center bg-gray-800 rounded-lg p-3"
+                >
+                  <div className="min-w-0">
+                    <p className="font-medium truncate">
+                      {account.accountName || account.accountId}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {account.platform} · {account.accountId}
+                    </p>
+                  </div>
+                  <span className="text-sm text-gray-300">{account.currency}</span>
+                  <span
+                    className={`text-xs px-2 py-1 rounded-full text-center ${
+                      account.windsorConnected
+                        ? 'bg-green-500/20 text-green-400'
+                        : 'bg-gray-900 text-gray-500'
+                    }`}
+                  >
+                    {account.syncStatus}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => syncAdAccount(account.accountId)}
+                    disabled={!account.windsorConnected}
+                    className="bg-indigo-500/20 hover:bg-indigo-500/30 disabled:opacity-40 text-indigo-300 rounded-lg py-2 text-xs"
+                  >
+                    Sync
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => disconnectAdAccount(account.id)}
+                    className="bg-gray-900 hover:bg-gray-700 text-gray-300 rounded-lg py-2 text-xs"
+                  >
+                    Desconectar
+                  </button>
+                </div>
+              ))}
+
+              {adAccounts.length === 0 && (
+                <div className="bg-gray-800 rounded-lg p-4 text-sm text-gray-400">
+                  Nenhuma conta adicionada ainda.
+                </div>
+              )}
             </div>
           </section>
 

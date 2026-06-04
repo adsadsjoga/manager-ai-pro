@@ -74,10 +74,15 @@ export async function GET(req: Request) {
     },
   })
 
-  const rows = await fetchFacebookAdsData({ dateFrom, dateTo })
   const results = []
 
   for (const adAccount of adAccounts) {
+    const rows = await fetchFacebookAdsData({
+      dateFrom,
+      dateTo,
+      accountId: adAccount.accountId,
+    })
+
     await prisma.dailyMetric.deleteMany({
       where: {
         adAccountId: adAccount.id,
@@ -164,6 +169,7 @@ export async function GET(req: Request) {
 
     results.push({
       accountId: adAccount.accountId,
+      rowsFetched: rows.length,
       rowsInserted: inserted,
       alertAutomation,
     })
@@ -173,7 +179,7 @@ export async function GET(req: Request) {
     success: true,
     dateFrom,
     dateTo,
-    rowsFetched: rows.length,
+    rowsFetched: results.reduce((acc, item) => acc + item.rowsFetched, 0),
     accountsProcessed: results.length,
     results,
   })

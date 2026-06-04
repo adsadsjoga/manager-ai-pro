@@ -27,13 +27,19 @@ export async function GET(req: Request) {
   }
 
   const adAccounts = await prisma.adAccount.findMany({
-    where: { userId },
-    select: { id: true, currency: true },
+    where: { userId, windsorConnected: true },
+    select: { id: true, accountId: true, accountName: true, currency: true },
+    orderBy: { updatedAt: 'desc' },
   })
 
-  const adAccountIds = adAccounts.map((account) => account.id)
-  const currency = adAccounts[0]?.currency || 'EUR'
   const { searchParams } = new URL(req.url)
+  const selectedAccountId = searchParams.get('accountId')
+  const selectedAccount =
+    adAccounts.find((account) => account.accountId === selectedAccountId) ||
+    adAccounts[0] ||
+    null
+  const adAccountIds = selectedAccount ? [selectedAccount.id] : []
+  const currency = selectedAccount?.currency || 'EUR'
   const dateFrom = parseDateParam(searchParams.get('dateFrom'))
   const dateTo = parseDateParam(searchParams.get('dateTo'))
 
@@ -100,6 +106,13 @@ export async function GET(req: Request) {
     },
     account: {
       currency,
+      accountId: selectedAccount?.accountId || null,
+      accountName: selectedAccount?.accountName || null,
+      accounts: adAccounts.map((account) => ({
+        accountId: account.accountId,
+        accountName: account.accountName,
+        currency: account.currency,
+      })),
     },
     metrics: {
       spend: totals.spend,

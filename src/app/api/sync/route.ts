@@ -67,6 +67,7 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
   const dateFrom = parseDateParam(searchParams.get('dateFrom')) || defaultDateFrom
   const dateTo = parseDateParam(searchParams.get('dateTo')) || today
+  const requestedAccountId = searchParams.get('accountId') || ACCOUNT_ID
 
   try {
     const user = await prisma.user.upsert({
@@ -88,7 +89,7 @@ export async function GET(req: Request) {
         userId_platform_accountId: {
           userId: user.id,
           platform: 'facebook',
-          accountId: ACCOUNT_ID,
+          accountId: requestedAccountId,
         },
       },
       update: {
@@ -99,7 +100,7 @@ export async function GET(req: Request) {
       create: {
         userId: user.id,
         platform: 'facebook',
-        accountId: ACCOUNT_ID,
+        accountId: requestedAccountId,
         accountName: 'Guia do Volante',
         currency: DEFAULT_CURRENCY,
         windsorConnected: true,
@@ -124,7 +125,11 @@ export async function GET(req: Request) {
       },
     })
 
-    const rows = await fetchFacebookAdsData({ dateFrom, dateTo })
+    const rows = await fetchFacebookAdsData({
+      dateFrom,
+      dateTo,
+      accountId: adAccount.accountId,
+    })
 
     if (rows.length === 0) {
       await prisma.adAccount.update({

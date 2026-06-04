@@ -65,6 +65,13 @@ type DashboardResponse = {
   purchaseBreakdown?: PurchaseBreakdownItem[]
   account?: {
     currency: string
+    accountId: string | null
+    accountName: string | null
+    accounts?: Array<{
+      accountId: string
+      accountName: string | null
+      currency: string
+    }>
   }
   period?: {
     dateFrom: string | null
@@ -85,11 +92,12 @@ type LatestAnalysisResponse = {
   } | null
 }
 
-function dashboardUrl(range: DateRange) {
+function dashboardUrl(range: DateRange, accountId?: string) {
   const params = new URLSearchParams()
 
   if (range.dateFrom) params.set('dateFrom', range.dateFrom)
   if (range.dateTo) params.set('dateTo', range.dateTo)
+  if (accountId) params.set('accountId', accountId)
 
   const query = params.toString()
   return query ? `/api/dashboard?${query}` : '/api/dashboard'
@@ -119,11 +127,16 @@ export default function DashboardPage() {
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [currency, setCurrency] = useState('EUR')
+  const [accountId, setAccountId] = useState('')
+  const [accountName, setAccountName] = useState('Guia do Volante')
+  const [accounts, setAccounts] = useState<
+    NonNullable<DashboardResponse['account']>['accounts']
+  >([])
   const [activePeriodLabel, setActivePeriodLabel] = useState('Todo período')
 
-  async function loadDashboard(range?: DateRange) {
+  async function loadDashboard(range?: DateRange, nextAccountId = accountId) {
     setLoadingDashboard(true)
-    const res = await fetch(dashboardUrl(range || { dateFrom, dateTo }))
+    const res = await fetch(dashboardUrl(range || { dateFrom, dateTo }, nextAccountId))
     const data = (await res.json()) as DashboardResponse
 
     if (data.success && data.metrics && data.campaigns) {
@@ -131,6 +144,9 @@ export default function DashboardPage() {
       setCampaigns(data.campaigns)
       setPurchaseBreakdown(data.purchaseBreakdown || [])
       setCurrency(data.account?.currency || 'EUR')
+      setAccountId(data.account?.accountId || '')
+      setAccountName(data.account?.accountName || 'Conta Facebook')
+      setAccounts(data.account?.accounts || [])
       setAnalysis(null)
       setAnalysisSavedAt(null)
     }
@@ -151,6 +167,9 @@ export default function DashboardPage() {
           setCampaigns(data.campaigns)
           setPurchaseBreakdown(data.purchaseBreakdown || [])
           setCurrency(data.account?.currency || 'EUR')
+          setAccountId(data.account?.accountId || '')
+          setAccountName(data.account?.accountName || 'Conta Facebook')
+          setAccounts(data.account?.accounts || [])
         }
       })
       .finally(() => {
@@ -185,6 +204,7 @@ export default function DashboardPage() {
         dateFrom: dateFrom || '2025-01-01',
         dateTo: dateTo || new Date().toISOString().slice(0, 10),
       })
+      if (accountId) params.set('accountId', accountId)
       const res = await fetch(`/api/sync?${params.toString()}`)
       const data = await res.json()
 
@@ -197,7 +217,7 @@ export default function DashboardPage() {
         data.warning ||
           `Sincronizado: ${data.rowsInserted} linhas de ${data.dateFrom} ate ${data.dateTo}.`
       )
-      await loadDashboard()
+      await loadDashboard(undefined, accountId)
       setSynced(true)
     } catch (error: unknown) {
       setSyncError(error instanceof Error ? error.message : 'Erro inesperado')
@@ -210,7 +230,15 @@ export default function DashboardPage() {
     setDateFrom(range.dateFrom)
     setDateTo(range.dateTo)
     setActivePeriodLabel(label)
-    await loadDashboard(range)
+    await loadDashboard(range, accountId)
+  }
+
+  async function handleAccountChange(nextAccountId: string) {
+    setAccountId(nextAccountId)
+    setActivePeriodLabel('Todo período')
+    setDateFrom('')
+    setDateTo('')
+    await loadDashboard({ dateFrom: '', dateTo: '' }, nextAccountId)
   }
 
   async function handleAnalyze() {
@@ -309,7 +337,7 @@ export default function DashboardPage() {
 
         <div className="absolute bottom-6 left-6 right-6">
           <div className="bg-gray-800 rounded-lg p-3 text-xs text-gray-400">
-            <div className="font-medium text-white mb-1">Guia do Volante</div>
+            <div className="font-medium text-white mb-1">{accountName}</div>
             <div className="flex items-center gap-1">
               <span className="w-2 h-2 bg-green-400 rounded-full inline-block"></span>
               Windsor.ai conectado
@@ -323,11 +351,25 @@ export default function DashboardPage() {
           <div>
             <h1 className="text-2xl font-bold">Dashboard</h1>
             <p className="text-gray-400 text-sm mt-1">
-              Guia do Volante · Dados reais via Windsor.ai
+              {accountName} · Dados reais via Windsor.ai
             </p>
           </div>
 
           <div className="flex gap-2">
+            {accounts && accounts.length > 1 && (
+              <select
+                value={accountId}
+                onChange={(event) => handleAccountChange(event.target.value)}
+                className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+              >
+                {accounts.map((account) => (
+                  <option key={account.accountId} value={account.accountId}>
+                    {account.accountName || account.accountId}
+                  </option>
+                ))}
+              </select>
+            )}
+
             <button
               onClick={handleAnalyze}
               disabled={analyzing || campaigns.length === 0}
