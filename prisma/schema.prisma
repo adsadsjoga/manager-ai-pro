@@ -69,6 +69,7 @@ model AdAccount {
   syncLogs     SyncLog[]
   reports      Report[]
   leads        Lead[]
+  metaAds      MetaAd[]
 
   @@unique([userId, platform, accountId])
 }
@@ -214,6 +215,38 @@ model Lead {
   user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   client    Client?    @relation(fields: [clientId], references: [id])
   adAccount AdAccount? @relation(fields: [adAccountId], references: [id])
+}
+
+model MetaAd {
+  id             String   @id @default(uuid())
+  adAccountId    String
+  metaAdId       String
+  campaignId     String?
+  campaignName   String?
+  adsetId        String?
+  adsetName      String?
+  adName         String?
+  status         String?
+  effectiveStatus String?
+  creativeId     String?
+  creativeName   String?
+  primaryText    String?
+  headline       String?
+  description    String?
+  callToAction   String?
+  imageUrl       String?
+  videoId        String?
+  permalinkUrl   String?
+  thumbnailUrl   String?
+  videoMetrics   Json?
+  rawData        Json?
+  lastFetchedAt  DateTime @default(now())
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  adAccount AdAccount @relation(fields: [adAccountId], references: [id], onDelete: Cascade)
+
+  @@unique([adAccountId, metaAdId])
 }
 
 model SyncLog {

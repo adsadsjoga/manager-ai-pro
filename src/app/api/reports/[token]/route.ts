@@ -8,6 +8,13 @@ function addDays(date: Date, days: number) {
   return next
 }
 
+function metricAccountId(rawData: unknown) {
+  if (!rawData || typeof rawData !== 'object') return ''
+
+  const accountId = (rawData as { account_id?: unknown }).account_id
+  return String(accountId || '').trim()
+}
+
 export async function GET(
   _req: Request,
   context: { params: Promise<{ token: string }> }
@@ -54,12 +61,16 @@ export async function GET(
     },
   })
 
+  const scopedMetrics = metrics.filter(
+    (item) => metricAccountId(item.rawData) === report.adAccount?.accountId
+  )
+
   const html = buildReportHtml({
     accountName: report.adAccount.accountName || 'Conta de anuncios',
     currency: report.adAccount.currency,
     periodStart: report.periodStart,
     periodEnd: report.periodEnd,
-    metrics,
+    metrics: scopedMetrics,
     latestInsight,
   })
 

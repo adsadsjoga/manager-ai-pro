@@ -32,11 +32,26 @@ type DashboardResponse = {
   campaigns?: Campaign[]
   account?: {
     currency: string
+    accountId: string | null
+    accountName: string | null
+    accounts?: Array<{
+      accountId: string
+      accountName: string | null
+      currency: string
+    }>
   }
 }
 
 type HealthFilter = 'all' | 'healthy' | 'attention' | 'critical'
 type SortKey = 'spend' | 'purchases' | 'ctr' | 'cpc' | 'health'
+
+const SELECTED_ACCOUNT_STORAGE_KEY = 'ads-manager:selected-account-id'
+
+function dashboardUrl(accountId?: string) {
+  return accountId
+    ? `/api/dashboard?accountId=${encodeURIComponent(accountId)}`
+    : '/api/dashboard'
+}
 
 function formatMoney(value: number, currency: string) {
   return new Intl.NumberFormat('pt-PT', {
@@ -76,11 +91,17 @@ export default function CampaignsPage() {
   const [sortKey, setSortKey] = useState<SortKey>('spend')
   const [selectedName, setSelectedName] = useState<string | null>(null)
   const [currency, setCurrency] = useState('EUR')
+  const [accountId, setAccountId] = useState('')
+  const [accountName, setAccountName] = useState('Conta Facebook')
+  const [accounts, setAccounts] = useState<
+    NonNullable<DashboardResponse['account']>['accounts']
+  >([])
 
   useEffect(() => {
     let active = true
+    const savedAccountId = window.localStorage.getItem(SELECTED_ACCOUNT_STORAGE_KEY) || ''
 
-    fetch('/api/dashboard')
+    fetch(dashboardUrl(savedAccountId))
       .then((res) => res.json() as Promise<DashboardResponse>)
       .then((data) => {
         if (!active) return
@@ -88,6 +109,12 @@ export default function CampaignsPage() {
         if (data.success && data.campaigns) {
           setCampaigns(data.campaigns)
           setCurrency(data.account?.currency || 'EUR')
+          setAccountId(data.account?.accountId || '')
+          setAccountName(data.account?.accountName || 'Conta Facebook')
+          setAccounts(data.account?.accounts || [])
+          if (data.account?.accountId) {
+            window.localStorage.setItem(SELECTED_ACCOUNT_STORAGE_KEY, data.account.accountId)
+          }
           setSelectedName(data.campaigns[0]?.name || null)
         }
       })
@@ -99,6 +126,30 @@ export default function CampaignsPage() {
       active = false
     }
   }, [])
+
+  async function handleAccountChange(nextAccountId: string) {
+    setLoading(true)
+    setAccountId(nextAccountId)
+    setQuery('')
+    setSelectedName(null)
+    window.localStorage.setItem(SELECTED_ACCOUNT_STORAGE_KEY, nextAccountId)
+
+    try {
+      const res = await fetch(dashboardUrl(nextAccountId))
+      const data = (await res.json()) as DashboardResponse
+
+      if (data.success && data.campaigns) {
+        setCampaigns(data.campaigns)
+        setCurrency(data.account?.currency || 'EUR')
+        setAccountId(data.account?.accountId || nextAccountId)
+        setAccountName(data.account?.accountName || 'Conta Facebook')
+        setAccounts(data.account?.accounts || accounts)
+        setSelectedName(data.campaigns[0]?.name || null)
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const filteredCampaigns = useMemo(() => {
     return campaigns
@@ -149,6 +200,8 @@ export default function CampaignsPage() {
           {[
             { label: '📊 Dashboard', href: '/dashboard' },
             { label: '📣 Campanhas', href: '/dashboard/campaigns', active: true },
+            { label: '🎬 Criativos', href: '/dashboard/creatives' },
+            { label: '🧠 Diagnóstico IA', href: '/dashboard/diagnosis' },
             { label: '🔔 Alertas', href: '/dashboard/alerts' },
             { label: '📄 Relatorios', href: '/dashboard/reports' },
             { label: '👥 CRM', href: '/dashboard/crm' },
@@ -170,21 +223,37 @@ export default function CampaignsPage() {
       </div>
 
       <div className="ml-64 p-8">
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center justify-between gap-4 mb-8">
           <div>
             <h1 className="text-2xl font-bold">Campanhas</h1>
             <p className="text-gray-400 text-sm mt-1">
-              Analise performance, gargalos e oportunidades por campanha.
+              {accountName} · Analise performance, gargalos e oportunidades por campanha.
             </p>
           </div>
 
-          <a
-            href="/dashboard"
-            className="bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg text-sm flex items-center gap-2"
-          >
-            <ArrowLeft size={16} />
-            Dashboard
-          </a>
+          <div className="flex items-center gap-2">
+            {accounts && accounts.length > 1 && (
+              <select
+                value={accountId}
+                onChange={(event) => handleAccountChange(event.target.value)}
+                className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+              >
+                {accounts.map((account) => (
+                  <option key={account.accountId} value={account.accountId}>
+                    {account.accountName || account.accountId}
+                  </option>
+                ))}
+              </select>
+            )}
+
+            <a
+              href="/dashboard"
+              className="bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg text-sm flex items-center gap-2"
+            >
+              <ArrowLeft size={16} />
+              Dashboard
+            </a>
+          </div>
         </div>
 
         <div className="grid grid-cols-4 gap-4 mb-6">

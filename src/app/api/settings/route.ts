@@ -46,6 +46,7 @@ export async function GET() {
       integrations: {
         windsorConfigured: Boolean(process.env.WINDSOR_API_KEY),
         anthropicConfigured: Boolean(process.env.ANTHROPIC_API_KEY),
+        metaConfigured: Boolean(process.env.META_ACCESS_TOKEN),
       },
     },
   })

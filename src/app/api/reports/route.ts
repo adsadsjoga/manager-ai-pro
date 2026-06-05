@@ -7,6 +7,7 @@ type ReportBody = {
   reportType?: string
   dateFrom?: string
   dateTo?: string
+  accountId?: string
 }
 
 function parseDate(value: string | undefined) {
@@ -21,7 +22,14 @@ function addDays(date: Date, days: number) {
   return next
 }
 
-export async function GET() {
+function metricAccountId(rawData: unknown) {
+  if (!rawData || typeof rawData !== 'object') return ''
+
+  const accountId = (rawData as { account_id?: unknown }).account_id
+  return String(accountId || '').trim()
+}
+
+export async function GET(req: Request) {
   const { userId } = await auth()
 
   if (!userId) {
@@ -31,10 +39,31 @@ export async function GET() {
     )
   }
 
+  const { searchParams } = new URL(req.url)
+  const accountId = searchParams.get('accountId')
+
+  const adAccount = accountId
+    ? await prisma.adAccount.findFirst({
+        where: { userId, accountId },
+        select: { id: true },
+      })
+    : null
+
   const reports = await prisma.report.findMany({
-    where: { userId },
+    where: {
+      userId,
+      ...(accountId ? { adAccountId: adAccount?.id || '__none__' } : {}),
+    },
     orderBy: { createdAt: 'desc' },
     take: 20,
+    include: {
+      adAccount: {
+        select: {
+          accountId: true,
+          accountName: true,
+        },
+      },
+    },
   })
 
   return NextResponse.json({
@@ -65,7 +94,10 @@ export async function POST(req: Request) {
   }
 
   const adAccount = await prisma.adAccount.findFirst({
-    where: { userId },
+    where: {
+      userId,
+      ...(body.accountId ? { accountId: body.accountId } : {}),
+    },
     orderBy: { updatedAt: 'desc' },
   })
 
@@ -76,7 +108,7 @@ export async function POST(req: Request) {
     )
   }
 
-  const metricsCount = await prisma.dailyMetric.count({
+  const metrics = await prisma.dailyMetric.findMany({
     where: {
       adAccountId: adAccount.id,
       date: {
@@ -84,7 +116,13 @@ export async function POST(req: Request) {
         lt: addDays(periodEnd, 1),
       },
     },
+    select: {
+      rawData: true,
+    },
   })
+  const metricsCount = metrics.filter(
+    (metric) => metricAccountId(metric.rawData) === adAccount.accountId
+  ).length
 
   if (metricsCount === 0) {
     return NextResponse.json(

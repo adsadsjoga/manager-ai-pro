@@ -12,6 +12,7 @@ type SettingsResponse = {
     integrations?: {
       windsorConfigured: boolean
       anthropicConfigured: boolean
+      metaConfigured?: boolean
     }
   }
   error?: string
@@ -56,6 +57,7 @@ type AdAccountsResponse = {
 export default function SettingsPage() {
   const [windsorConfigured, setWindsorConfigured] = useState(false)
   const [anthropicConfigured, setAnthropicConfigured] = useState(false)
+  const [metaConfigured, setMetaConfigured] = useState(false)
   const [accountId, setAccountId] = useState('')
   const [accountName, setAccountName] = useState('Guia do Volante')
   const [currency, setCurrency] = useState('EUR')
@@ -66,6 +68,8 @@ export default function SettingsPage() {
   const [reportDay, setReportDay] = useState('monday')
   const [alertRules, setAlertRules] = useState<AlertRule[]>([])
   const [adAccounts, setAdAccounts] = useState<AdAccountItem[]>([])
+  const [discoveringAccounts, setDiscoveringAccounts] = useState(false)
+  const [syncingAccountId, setSyncingAccountId] = useState<string | null>(null)
   const [newAccount, setNewAccount] = useState({
     accountName: '',
     accountId: '',
@@ -89,6 +93,7 @@ export default function SettingsPage() {
         setTimezone(data.settings.timezone)
         setWindsorConfigured(Boolean(data.settings.integrations?.windsorConfigured))
         setAnthropicConfigured(Boolean(data.settings.integrations?.anthropicConfigured))
+        setMetaConfigured(Boolean(data.settings.integrations?.metaConfigured))
       })
 
     fetch('/api/alert-rules')
@@ -166,6 +171,32 @@ export default function SettingsPage() {
     return 'bg-blue-500/20 text-blue-400'
   }
 
+  const accountStatus = (account: AdAccountItem) => {
+    if (!account.windsorConnected || account.syncStatus === 'disconnected') {
+      return {
+        label: 'desconectada',
+        className: 'bg-gray-900 text-gray-500',
+      }
+    }
+    if (account.syncStatus === 'success') {
+      return {
+        label: 'conectada',
+        className: 'bg-green-500/20 text-green-400',
+      }
+    }
+    if (account.syncStatus === 'discovered') {
+      return {
+        label: 'disponivel',
+        className: 'bg-blue-500/20 text-blue-400',
+      }
+    }
+
+    return {
+      label: account.syncStatus || 'pendente',
+      className: 'bg-yellow-500/20 text-yellow-400',
+    }
+  }
+
   async function addAdAccount() {
     setSaveError(null)
 
@@ -195,41 +226,51 @@ export default function SettingsPage() {
 
   async function discoverAdAccounts() {
     setSaveError(null)
+    setDiscoveringAccounts(true)
 
-    const res = await fetch('/api/ad-accounts', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'discover',
-        currency: newAccount.currency,
-        timezone: newAccount.timezone,
-      }),
-    })
-    const data = (await res.json()) as AdAccountsResponse
+    try {
+      const res = await fetch('/api/ad-accounts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'discover',
+          currency: newAccount.currency,
+          timezone: newAccount.timezone,
+        }),
+      })
+      const data = (await res.json()) as AdAccountsResponse
 
-    if (!data.success || !data.accounts) {
-      setSaveError(data.error || 'Erro ao buscar contas na Windsor')
-      return
+      if (!data.success || !data.accounts) {
+        setSaveError(data.error || 'Erro ao buscar contas na Windsor')
+        return
+      }
+
+      setAdAccounts(data.accounts)
+    } finally {
+      setDiscoveringAccounts(false)
     }
-
-    setAdAccounts(data.accounts)
   }
 
   async function syncAdAccount(accountId: string) {
     setSaveError(null)
+    setSyncingAccountId(accountId)
 
-    const res = await fetch(`/api/sync?accountId=${encodeURIComponent(accountId)}`)
-    const data = await res.json()
+    try {
+      const res = await fetch(`/api/sync?accountId=${encodeURIComponent(accountId)}`)
+      const data = await res.json()
 
-    if (!data.success) {
-      setSaveError(data.error || 'Erro ao sincronizar conta')
-      return
-    }
+      if (!data.success) {
+        setSaveError(data.error || 'Erro ao sincronizar conta')
+        return
+      }
 
-    const accountsRes = await fetch('/api/ad-accounts')
-    const accountsData = (await accountsRes.json()) as AdAccountsResponse
-    if (accountsData.success && accountsData.accounts) {
-      setAdAccounts(accountsData.accounts)
+      const accountsRes = await fetch('/api/ad-accounts')
+      const accountsData = (await accountsRes.json()) as AdAccountsResponse
+      if (accountsData.success && accountsData.accounts) {
+        setAdAccounts(accountsData.accounts)
+      }
+    } finally {
+      setSyncingAccountId(null)
     }
   }
 
@@ -263,6 +304,8 @@ export default function SettingsPage() {
           {[
             { label: '📊 Dashboard', href: '/dashboard' },
             { label: '📣 Campanhas', href: '/dashboard/campaigns' },
+            { label: '🎬 Criativos', href: '/dashboard/creatives' },
+            { label: '🧠 Diagnóstico IA', href: '/dashboard/diagnosis' },
             { label: '🔔 Alertas', href: '/dashboard/alerts' },
             { label: '📄 Relatorios', href: '/dashboard/reports' },
             { label: '👥 CRM', href: '/dashboard/crm' },
@@ -392,9 +435,10 @@ export default function SettingsPage() {
                 <button
                   type="button"
                   onClick={discoverAdAccounts}
-                  className="bg-green-500/20 hover:bg-green-500/30 text-green-400 px-3 py-1.5 rounded-lg text-xs font-medium"
+                  disabled={discoveringAccounts}
+                  className="bg-green-500/20 hover:bg-green-500/30 disabled:opacity-50 text-green-400 px-3 py-1.5 rounded-lg text-xs font-medium"
                 >
-                  Buscar contas
+                  {discoveringAccounts ? 'Buscando...' : 'Buscar contas'}
                 </button>
               </div>
             </div>
@@ -442,20 +486,18 @@ export default function SettingsPage() {
                   <span className="text-sm text-gray-300">{account.currency}</span>
                   <span
                     className={`text-xs px-2 py-1 rounded-full text-center ${
-                      account.windsorConnected
-                        ? 'bg-green-500/20 text-green-400'
-                        : 'bg-gray-900 text-gray-500'
+                      accountStatus(account).className
                     }`}
                   >
-                    {account.syncStatus}
+                    {accountStatus(account).label}
                   </span>
                   <button
                     type="button"
                     onClick={() => syncAdAccount(account.accountId)}
-                    disabled={!account.windsorConnected}
+                    disabled={!account.windsorConnected || syncingAccountId === account.accountId}
                     className="bg-indigo-500/20 hover:bg-indigo-500/30 disabled:opacity-40 text-indigo-300 rounded-lg py-2 text-xs"
                   >
-                    Sync
+                    {syncingAccountId === account.accountId ? 'Sync...' : 'Sync'}
                   </button>
                   <button
                     type="button"
@@ -508,6 +550,25 @@ export default function SettingsPage() {
                   <option value="1440">1x por dia</option>
                 </select>
               </div>
+            </div>
+          </section>
+
+          <section className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+            <h2 className="font-semibold mb-4 flex items-center gap-2">
+              Meta Marketing API
+              <span
+                className={`text-xs px-2 py-0.5 rounded-full ml-1 ${
+                  metaConfigured
+                    ? 'bg-green-500/20 text-green-400'
+                    : 'bg-yellow-500/20 text-yellow-400'
+                }`}
+              >
+                {metaConfigured ? 'Conectado' : 'Pendente'}
+              </span>
+            </h2>
+            <div className="bg-gray-800 rounded-lg p-4 text-sm text-gray-300">
+              Use META_ACCESS_TOKEN para puxar anuncios, copies, criativos, status e metricas de
+              video direto da Meta.
             </div>
           </section>
 

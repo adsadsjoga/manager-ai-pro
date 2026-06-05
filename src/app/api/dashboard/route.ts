@@ -1,6 +1,7 @@
 import { auth } from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
 import { summarizeCampaigns } from '@/lib/campaign-metrics'
+import { resolveFacebookAccountName } from '@/lib/facebook-accounts'
 import { prisma } from '@/lib/prisma'
 
 function parseDateParam(value: string | null) {
@@ -14,6 +15,29 @@ function addDays(date: Date, days: number) {
   const nextDate = new Date(date)
   nextDate.setUTCDate(nextDate.getUTCDate() + days)
   return nextDate
+}
+
+function metricAccountId(rawData: unknown) {
+  if (!rawData || typeof rawData !== 'object') return ''
+
+  const accountId = (rawData as { account_id?: unknown }).account_id
+  return String(accountId || '').trim()
+}
+
+function belongsToSelectedAccount(
+  rawData: unknown,
+  selectedAccountId: string | null | undefined
+) {
+  if (!selectedAccountId) return true
+
+  const rawAccountId = metricAccountId(rawData)
+  return rawAccountId === selectedAccountId
+}
+
+function metricSource(rawData: unknown) {
+  if (!rawData || typeof rawData !== 'object') return 'unknown'
+
+  return String((rawData as { source?: unknown }).source || 'windsor')
 }
 
 export async function GET(req: Request) {
@@ -40,6 +64,13 @@ export async function GET(req: Request) {
     null
   const adAccountIds = selectedAccount ? [selectedAccount.id] : []
   const currency = selectedAccount?.currency || 'EUR'
+  const selectedAccountName = selectedAccount
+    ? resolveFacebookAccountName(
+        selectedAccount.accountId,
+        selectedAccount.accountName,
+        selectedAccount.accountName
+      )
+    : null
   const dateFrom = parseDateParam(searchParams.get('dateFrom'))
   const dateTo = parseDateParam(searchParams.get('dateTo'))
 
@@ -62,7 +93,11 @@ export async function GET(req: Request) {
     },
   })
 
-  const filteredMetrics = metrics.filter(
+  const accountScopedMetrics = metrics.filter((item) =>
+    belongsToSelectedAccount(item.rawData, selectedAccount?.accountId)
+  )
+
+  const filteredMetrics = accountScopedMetrics.filter(
     (item) => item.campaignName || item.adName
   )
 
@@ -86,7 +121,12 @@ export async function GET(req: Request) {
     }
   )
 
-  const campaigns = summarizeCampaigns(metrics)
+  const campaigns = summarizeCampaigns(accountScopedMetrics)
+  const dataSource = accountScopedMetrics.some(
+    (item) => metricSource(item.rawData) === 'meta'
+  )
+    ? 'meta'
+    : 'windsor'
 
   const purchaseBreakdown = filteredMetrics
     .filter((item) => item.purchases > 0)
@@ -106,11 +146,16 @@ export async function GET(req: Request) {
     },
     account: {
       currency,
+      dataSource,
       accountId: selectedAccount?.accountId || null,
-      accountName: selectedAccount?.accountName || null,
+      accountName: selectedAccountName,
       accounts: adAccounts.map((account) => ({
         accountId: account.accountId,
-        accountName: account.accountName,
+        accountName: resolveFacebookAccountName(
+          account.accountId,
+          account.accountName,
+          account.accountName
+        ),
         currency: account.currency,
       })),
     },

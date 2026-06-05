@@ -1,5 +1,6 @@
 import { auth, currentUser } from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
+import { resolveFacebookAccountName } from '@/lib/facebook-accounts'
 import { prisma } from '@/lib/prisma'
 import { fetchFacebookAdAccounts } from '@/services/windsor-service'
 
@@ -13,6 +14,42 @@ type AccountBody = {
 }
 
 const SUPPORTED_CURRENCIES = ['EUR', 'BRL', 'USD', 'GBP']
+
+async function listAdAccounts(userId: string) {
+  const accounts = await prisma.adAccount.findMany({
+    where: { userId },
+    orderBy: { updatedAt: 'desc' },
+    select: {
+      id: true,
+      platform: true,
+      accountId: true,
+      accountName: true,
+      currency: true,
+      timezone: true,
+      windsorConnected: true,
+      syncStatus: true,
+      lastSyncAt: true,
+      createdAt: true,
+    },
+  })
+
+  return Array.from(
+    new Map(
+      accounts.map((account) => {
+        const normalizedAccount = {
+          ...account,
+          accountName: resolveFacebookAccountName(
+            account.accountId,
+            account.accountName,
+            account.accountName
+          ),
+        }
+
+        return [`${account.platform}-${account.accountId}`, normalizedAccount]
+      })
+    ).values()
+  )
+}
 
 async function ensureUser(userId: string) {
   const clerkUser = await currentUser()
@@ -44,34 +81,9 @@ export async function GET() {
     )
   }
 
-  const accounts = await prisma.adAccount.findMany({
-    where: { userId },
-    orderBy: { updatedAt: 'desc' },
-    select: {
-      id: true,
-      platform: true,
-      accountId: true,
-      accountName: true,
-      currency: true,
-      timezone: true,
-      windsorConnected: true,
-      syncStatus: true,
-      lastSyncAt: true,
-      createdAt: true,
-    },
-  })
-  const uniqueAccounts = Array.from(
-    new Map(
-      accounts.map((account) => [
-        `${account.platform}-${account.accountId}`,
-        account,
-      ])
-    ).values()
-  )
-
   return NextResponse.json({
     success: true,
-    accounts: uniqueAccounts,
+    accounts: await listAdAccounts(userId),
   })
 }
 
@@ -98,10 +110,28 @@ export async function POST(req: Request) {
 
   if (body.action === 'discover') {
     const discoveredAccounts = await fetchFacebookAdAccounts()
-    const accounts = []
 
     for (const discovered of discoveredAccounts) {
-      const account = await prisma.adAccount.upsert({
+      const existingAccount = await prisma.adAccount.findUnique({
+        where: {
+          userId_platform_accountId: {
+            userId: user.id,
+            platform: 'facebook',
+            accountId: discovered.accountId,
+          },
+        },
+        select: {
+          syncStatus: true,
+          accountName: true,
+        },
+      })
+      const accountName = resolveFacebookAccountName(
+        discovered.accountId,
+        discovered.accountName,
+        existingAccount?.accountName
+      )
+
+      await prisma.adAccount.upsert({
         where: {
           userId_platform_accountId: {
             userId: user.id,
@@ -110,15 +140,18 @@ export async function POST(req: Request) {
           },
         },
         update: {
-          accountName: discovered.accountName,
+          accountName,
           windsorConnected: true,
-          syncStatus: 'discovered',
+          syncStatus:
+            existingAccount?.syncStatus === 'success'
+              ? 'success'
+              : 'discovered',
         },
         create: {
           userId: user.id,
           platform: 'facebook',
           accountId: discovered.accountId,
-          accountName: discovered.accountName,
+          accountName,
           currency,
           timezone: body.timezone || 'Europe/Lisbon',
           windsorConnected: true,
@@ -126,12 +159,11 @@ export async function POST(req: Request) {
         },
       })
 
-      accounts.push(account)
     }
 
     return NextResponse.json({
       success: true,
-      accounts,
+      accounts: await listAdAccounts(user.id),
     })
   }
 
@@ -167,6 +199,12 @@ export async function POST(req: Request) {
     )
   }
 
+  const accountName = resolveFacebookAccountName(
+    body.accountId,
+    body.accountName,
+    body.accountName
+  )
+
   const account = await prisma.adAccount.upsert({
     where: {
       userId_platform_accountId: {
@@ -176,7 +214,7 @@ export async function POST(req: Request) {
       },
     },
     update: {
-      accountName: body.accountName || body.accountId,
+      accountName,
       currency,
       timezone: body.timezone || 'Europe/Lisbon',
       windsorConnected: true,
@@ -186,7 +224,7 @@ export async function POST(req: Request) {
       userId: user.id,
       platform: 'facebook',
       accountId: body.accountId,
-      accountName: body.accountName || body.accountId,
+      accountName,
       currency,
       timezone: body.timezone || 'Europe/Lisbon',
       windsorConnected: true,

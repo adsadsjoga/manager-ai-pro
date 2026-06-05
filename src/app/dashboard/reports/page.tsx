@@ -13,6 +13,10 @@ type ReportItem = {
   shareToken: string | null
   generatedAt: string | null
   createdAt: string
+  adAccount?: {
+    accountId: string
+    accountName: string | null
+  } | null
 }
 
 type ReportsResponse = {
@@ -22,12 +26,26 @@ type ReportsResponse = {
   error?: string
 }
 
+type AdAccountItem = {
+  accountId: string
+  accountName: string | null
+  currency: string
+  windsorConnected: boolean
+}
+
+type AdAccountsResponse = {
+  success: boolean
+  accounts?: AdAccountItem[]
+}
+
 const typeConfig: Record<string, { label: string; color: string; bg: string; icon: string }> = {
   daily: { label: 'Diario', color: 'text-blue-400', bg: 'bg-blue-500/20', icon: 'D' },
   weekly: { label: 'Semanal', color: 'text-purple-400', bg: 'bg-purple-500/20', icon: 'S' },
   monthly: { label: 'Mensal', color: 'text-indigo-400', bg: 'bg-indigo-500/20', icon: 'M' },
   custom: { label: 'Customizado', color: 'text-yellow-400', bg: 'bg-yellow-500/20', icon: 'C' },
 }
+
+const SELECTED_ACCOUNT_STORAGE_KEY = 'ads-manager:selected-account-id'
 
 function formatDate(value: string | null) {
   if (!value) return '-'
@@ -43,6 +61,12 @@ function reportUrl(report: ReportItem) {
   return report.shareToken ? `/api/reports/${report.shareToken}` : '#'
 }
 
+function reportsUrl(accountId?: string) {
+  return accountId
+    ? `/api/reports?accountId=${encodeURIComponent(accountId)}`
+    : '/api/reports'
+}
+
 export default function ReportsPage() {
   const [reports, setReports] = useState<ReportItem[]>([])
   const [generating, setGenerating] = useState(false)
@@ -50,6 +74,8 @@ export default function ReportsPage() {
   const [selectedType, setSelectedType] = useState('weekly')
   const [dateFrom, setDateFrom] = useState('2025-06-01')
   const [dateTo, setDateTo] = useState('2025-06-30')
+  const [accountId, setAccountId] = useState('')
+  const [accounts, setAccounts] = useState<AdAccountItem[]>([])
 
   const latestReport = reports[0] || null
 
@@ -61,13 +87,29 @@ export default function ReportsPage() {
   useEffect(() => {
     let active = true
 
-    fetch('/api/reports')
-      .then((res) => res.json() as Promise<ReportsResponse>)
+    fetch('/api/ad-accounts')
+      .then((res) => res.json() as Promise<AdAccountsResponse>)
       .then((data) => {
-        if (!active) return
+        if (!active || !data.success || !data.accounts) return
 
-        if (data.success) {
-          setReports(data.reports || [])
+        const connectedAccounts = data.accounts.filter((account) => account.windsorConnected)
+        const savedAccountId = window.localStorage.getItem(SELECTED_ACCOUNT_STORAGE_KEY)
+        const selectedAccount =
+          connectedAccounts.find((account) => account.accountId === savedAccountId) ||
+          connectedAccounts[0]
+
+        setAccounts(connectedAccounts)
+        setAccountId(selectedAccount?.accountId || '')
+        if (selectedAccount?.accountId) {
+          window.localStorage.setItem(SELECTED_ACCOUNT_STORAGE_KEY, selectedAccount.accountId)
+          fetch(reportsUrl(selectedAccount.accountId))
+            .then((res) => res.json() as Promise<ReportsResponse>)
+            .then((reportsData) => {
+              if (!active || !reportsData.success) return
+              setReports(reportsData.reports || [])
+            })
+        } else {
+          setReports([])
         }
       })
 
@@ -88,12 +130,17 @@ export default function ReportsPage() {
           reportType: selectedType,
           dateFrom,
           dateTo,
+          accountId,
         }),
       })
       const data = (await res.json()) as ReportsResponse
 
       if (!data.success || !data.report) {
-        setError(data.error || 'Erro ao gerar relatorio')
+        setError(
+          data.error === 'Sem dados para este periodo'
+            ? 'Sem dados publicados para este periodo nesta conta.'
+            : data.error || 'Erro ao gerar relatorio'
+        )
         return
       }
 
@@ -106,6 +153,20 @@ export default function ReportsPage() {
     }
   }
 
+  function handleAccountChange(nextAccountId: string) {
+    setAccountId(nextAccountId)
+    setReports([])
+    setError(null)
+    window.localStorage.setItem(SELECTED_ACCOUNT_STORAGE_KEY, nextAccountId)
+    fetch(reportsUrl(nextAccountId))
+      .then((res) => res.json() as Promise<ReportsResponse>)
+      .then((data) => {
+        if (data.success) {
+          setReports(data.reports || [])
+        }
+      })
+  }
+
   return (
     <div className="min-h-screen bg-gray-950 text-white">
       <div className="fixed left-0 top-0 h-full w-64 bg-gray-900 border-r border-gray-800 p-6">
@@ -114,6 +175,8 @@ export default function ReportsPage() {
           {[
             { label: '📊 Dashboard', href: '/dashboard' },
             { label: '📣 Campanhas', href: '/dashboard/campaigns' },
+            { label: '🎬 Criativos', href: '/dashboard/creatives' },
+            { label: '🧠 Diagnóstico IA', href: '/dashboard/diagnosis' },
             { label: '🔔 Alertas', href: '/dashboard/alerts' },
             { label: '📄 Relatorios', href: '/dashboard/reports', active: true },
             { label: '👥 CRM', href: '/dashboard/crm' },
@@ -135,13 +198,27 @@ export default function ReportsPage() {
       </div>
 
       <div className="ml-64 p-8">
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between gap-4 mb-6">
           <div>
             <h1 className="text-2xl font-bold">Relatorios</h1>
             <p className="text-gray-400 text-sm mt-1">
               Gere relatorios reais a partir das metricas sincronizadas.
             </p>
           </div>
+
+          {accounts.length > 1 && (
+            <select
+              value={accountId}
+              onChange={(event) => handleAccountChange(event.target.value)}
+              className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+            >
+              {accounts.map((account) => (
+                <option key={account.accountId} value={account.accountId}>
+                  {account.accountName || account.accountId}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
 
         {error && (
@@ -205,7 +282,7 @@ export default function ReportsPage() {
 
               <button
                 onClick={handleGenerate}
-                disabled={generating}
+                disabled={generating || !accountId}
                 className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 py-3 rounded-lg text-sm font-medium transition-colors"
               >
                 {generating ? 'Gerando...' : 'Gerar e abrir relatorio'}

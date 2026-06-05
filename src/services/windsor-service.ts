@@ -79,6 +79,7 @@ export async function fetchFacebookAdsData(
   const fields = [
     'date',
     'datasource',
+    'account_id',
     'account_name',
     'source',
     'campaign',
@@ -123,7 +124,7 @@ export async function fetchFacebookAdAccounts(): Promise<WindsorFacebookAccount[
   }
 
   const today = new Date().toISOString().split('T')[0]
-  const oneYearAgo = new Date(Date.now() - 365 * 86400000)
+  const ninetyDaysAgo = new Date(Date.now() - 90 * 86400000)
     .toISOString()
     .split('T')[0]
 
@@ -131,7 +132,7 @@ export async function fetchFacebookAdAccounts(): Promise<WindsorFacebookAccount[
   const url =
     `https://connectors.windsor.ai/facebook` +
     `?api_key=${WINDSOR_API_KEY}` +
-    `&date_from=${oneYearAgo}` +
+    `&date_from=${ninetyDaysAgo}` +
     `&date_to=${today}` +
     `&fields=${fields}`
 
@@ -144,17 +145,30 @@ export async function fetchFacebookAdAccounts(): Promise<WindsorFacebookAccount[
   const json = await response.json()
   const rows = (json?.data ?? []) as WindsorRow[]
   const fallbackAccountId = process.env.WINDSOR_ACCOUNT_ID
+  const fallbackAccountName = process.env.WINDSOR_ACCOUNT_NAME
 
-  return Array.from(
-    new Map(
-      rows
-        .map((row) => {
-          const accountId = String(row.account_id || fallbackAccountId || '').trim()
-          const accountName = String(row.account_name || accountId || 'Conta Facebook').trim()
+  const accounts = new Map<string, WindsorFacebookAccount>()
 
-          return accountId ? [accountId, { accountId, accountName }] : null
-        })
-        .filter((item): item is [string, WindsorFacebookAccount] => Boolean(item))
-    ).values()
+  for (const row of rows) {
+    const accountId = String(row.account_id || '').trim()
+    if (!accountId) continue
+
+    accounts.set(accountId, {
+      accountId,
+      accountName: String(row.account_name || accountId).trim(),
+    })
+  }
+
+  if (accounts.size === 0 && fallbackAccountId) {
+    accounts.set(fallbackAccountId, {
+      accountId: fallbackAccountId,
+      accountName: fallbackAccountName || fallbackAccountId,
+    })
+  }
+
+  console.log(
+    `Windsor.ai account discovery found ${accounts.size} accounts from ${ninetyDaysAgo} to ${today}`
   )
+
+  return Array.from(accounts.values())
 }

@@ -193,6 +193,8 @@ export default function CRMPage() {
           {[
             { label: '📊 Dashboard', href: '/dashboard' },
             { label: '📣 Campanhas', href: '/dashboard/campaigns' },
+            { label: '🎬 Criativos', href: '/dashboard/creatives' },
+            { label: '🧠 Diagnóstico IA', href: '/dashboard/diagnosis' },
             { label: '🔔 Alertas', href: '/dashboard/alerts' },
             { label: '📄 Relatorios', href: '/dashboard/reports' },
             { label: '👥 CRM', href: '/dashboard/crm', active: true },

@@ -65,6 +65,7 @@ type DashboardResponse = {
   purchaseBreakdown?: PurchaseBreakdownItem[]
   account?: {
     currency: string
+    dataSource?: string
     accountId: string | null
     accountName: string | null
     accounts?: Array<{
@@ -91,6 +92,8 @@ type LatestAnalysisResponse = {
     analysis: AIAnalysis | null
   } | null
 }
+
+const SELECTED_ACCOUNT_STORAGE_KEY = 'ads-manager:selected-account-id'
 
 function dashboardUrl(range: DateRange, accountId?: string) {
   const params = new URLSearchParams()
@@ -127,6 +130,7 @@ export default function DashboardPage() {
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [currency, setCurrency] = useState('EUR')
+  const [dataSource, setDataSource] = useState('meta')
   const [accountId, setAccountId] = useState('')
   const [accountName, setAccountName] = useState('Guia do Volante')
   const [accounts, setAccounts] = useState<
@@ -144,9 +148,13 @@ export default function DashboardPage() {
       setCampaigns(data.campaigns)
       setPurchaseBreakdown(data.purchaseBreakdown || [])
       setCurrency(data.account?.currency || 'EUR')
+      setDataSource(data.account?.dataSource || 'meta')
       setAccountId(data.account?.accountId || '')
       setAccountName(data.account?.accountName || 'Conta Facebook')
       setAccounts(data.account?.accounts || [])
+      if (data.account?.accountId) {
+        window.localStorage.setItem(SELECTED_ACCOUNT_STORAGE_KEY, data.account.accountId)
+      }
       setAnalysis(null)
       setAnalysisSavedAt(null)
     }
@@ -156,8 +164,9 @@ export default function DashboardPage() {
 
   useEffect(() => {
     let active = true
+    const savedAccountId = window.localStorage.getItem(SELECTED_ACCOUNT_STORAGE_KEY) || ''
 
-    fetch(dashboardUrl({ dateFrom: '', dateTo: '' }))
+    fetch(dashboardUrl({ dateFrom: '', dateTo: '' }, savedAccountId))
       .then((res) => res.json() as Promise<DashboardResponse>)
       .then((data) => {
         if (!active) return
@@ -167,9 +176,13 @@ export default function DashboardPage() {
           setCampaigns(data.campaigns)
           setPurchaseBreakdown(data.purchaseBreakdown || [])
           setCurrency(data.account?.currency || 'EUR')
+          setDataSource(data.account?.dataSource || 'meta')
           setAccountId(data.account?.accountId || '')
           setAccountName(data.account?.accountName || 'Conta Facebook')
           setAccounts(data.account?.accounts || [])
+          if (data.account?.accountId) {
+            window.localStorage.setItem(SELECTED_ACCOUNT_STORAGE_KEY, data.account.accountId)
+          }
         }
       })
       .finally(() => {
@@ -215,7 +228,7 @@ export default function DashboardPage() {
 
       setSyncMessage(
         data.warning ||
-          `Sincronizado: ${data.rowsInserted} linhas de ${data.dateFrom} ate ${data.dateTo}.`
+          `Sincronizado via ${data.source === 'meta' ? 'Meta API' : 'Windsor.ai'}: ${data.rowsInserted} linhas de ${data.dateFrom} ate ${data.dateTo}.`
       )
       await loadDashboard(undefined, accountId)
       setSynced(true)
@@ -235,6 +248,7 @@ export default function DashboardPage() {
 
   async function handleAccountChange(nextAccountId: string) {
     setAccountId(nextAccountId)
+    window.localStorage.setItem(SELECTED_ACCOUNT_STORAGE_KEY, nextAccountId)
     setActivePeriodLabel('Todo período')
     setDateFrom('')
     setDateTo('')
@@ -316,6 +330,8 @@ export default function DashboardPage() {
           {[
             { label: '📊 Dashboard', href: '/dashboard', active: true },
             { label: '📣 Campanhas', href: '/dashboard/campaigns' },
+            { label: '🎬 Criativos', href: '/dashboard/creatives' },
+            { label: '🧠 Diagnóstico IA', href: '/dashboard/diagnosis' },
             { label: '🔔 Alertas', href: '/dashboard/alerts' },
             { label: '📄 Relatórios', href: '/dashboard/reports' },
             { label: '👥 CRM', href: '/dashboard/crm' },
@@ -340,7 +356,7 @@ export default function DashboardPage() {
             <div className="font-medium text-white mb-1">{accountName}</div>
             <div className="flex items-center gap-1">
               <span className="w-2 h-2 bg-green-400 rounded-full inline-block"></span>
-              Windsor.ai conectado
+              {dataSource === 'meta' ? 'Meta API conectada' : 'Windsor.ai conectado'}
             </div>
           </div>
         </div>
@@ -351,7 +367,7 @@ export default function DashboardPage() {
           <div>
             <h1 className="text-2xl font-bold">Dashboard</h1>
             <p className="text-gray-400 text-sm mt-1">
-              {accountName} · Dados reais via Windsor.ai
+              {accountName} · Dados reais via {dataSource === 'meta' ? 'Meta API' : 'Windsor.ai'}
             </p>
           </div>
 
@@ -605,9 +621,9 @@ export default function DashboardPage() {
               </thead>
 
               <tbody>
-                {purchaseBreakdown.map((item) => (
+                {purchaseBreakdown.map((item, index) => (
                   <tr
-                    key={`${item.date}-${item.campaignName}`}
+                    key={`${item.date}-${item.campaignName}-${index}`}
                     className="border-t border-gray-800 hover:bg-gray-800/30 transition-colors"
                   >
                     <td className="px-4 py-3 text-gray-300">{item.date}</td>
