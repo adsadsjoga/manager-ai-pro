@@ -195,6 +195,7 @@ export default function CRMPage() {
             { label: '📣 Campanhas', href: '/dashboard/campaigns' },
             { label: '🎬 Criativos', href: '/dashboard/creatives' },
             { label: '🧠 Diagnóstico IA', href: '/dashboard/diagnosis' },
+            { label: '✅ Recomendações', href: '/dashboard/recommendations' },
             { label: '🔔 Alertas', href: '/dashboard/alerts' },
             { label: '📄 Relatorios', href: '/dashboard/reports' },
             { label: '👥 CRM', href: '/dashboard/crm', active: true },

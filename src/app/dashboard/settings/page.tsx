@@ -306,6 +306,7 @@ export default function SettingsPage() {
             { label: '📣 Campanhas', href: '/dashboard/campaigns' },
             { label: '🎬 Criativos', href: '/dashboard/creatives' },
             { label: '🧠 Diagnóstico IA', href: '/dashboard/diagnosis' },
+            { label: '✅ Recomendações', href: '/dashboard/recommendations' },
             { label: '🔔 Alertas', href: '/dashboard/alerts' },
             { label: '📄 Relatorios', href: '/dashboard/reports' },
             { label: '👥 CRM', href: '/dashboard/crm' },

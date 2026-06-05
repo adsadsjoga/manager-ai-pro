@@ -202,6 +202,7 @@ export default function CampaignsPage() {
             { label: '📣 Campanhas', href: '/dashboard/campaigns', active: true },
             { label: '🎬 Criativos', href: '/dashboard/creatives' },
             { label: '🧠 Diagnóstico IA', href: '/dashboard/diagnosis' },
+            { label: '✅ Recomendações', href: '/dashboard/recommendations' },
             { label: '🔔 Alertas', href: '/dashboard/alerts' },
             { label: '📄 Relatorios', href: '/dashboard/reports' },
             { label: '👥 CRM', href: '/dashboard/crm' },
@@ -245,6 +246,13 @@ export default function CampaignsPage() {
                 ))}
               </select>
             )}
+
+            <a
+              href={`/api/export/campaigns?accountId=${encodeURIComponent(accountId)}`}
+              className="bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg text-sm"
+            >
+              Exportar CSV
+            </a>
 
             <a
               href="/dashboard"

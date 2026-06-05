@@ -200,6 +200,7 @@ export default function DiagnosisPage() {
             { label: '📣 Campanhas', href: '/dashboard/campaigns' },
             { label: '🎬 Criativos', href: '/dashboard/creatives' },
             { label: '🧠 Diagnostico IA', href: '/dashboard/diagnosis', active: true },
+            { label: '✅ Recomendações', href: '/dashboard/recommendations' },
             { label: '🔔 Alertas', href: '/dashboard/alerts' },
             { label: '📄 Relatorios', href: '/dashboard/reports' },
             { label: '👥 CRM', href: '/dashboard/crm' },

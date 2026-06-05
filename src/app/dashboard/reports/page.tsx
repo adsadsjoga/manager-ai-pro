@@ -177,6 +177,7 @@ export default function ReportsPage() {
             { label: '📣 Campanhas', href: '/dashboard/campaigns' },
             { label: '🎬 Criativos', href: '/dashboard/creatives' },
             { label: '🧠 Diagnóstico IA', href: '/dashboard/diagnosis' },
+            { label: '✅ Recomendações', href: '/dashboard/recommendations' },
             { label: '🔔 Alertas', href: '/dashboard/alerts' },
             { label: '📄 Relatorios', href: '/dashboard/reports', active: true },
             { label: '👥 CRM', href: '/dashboard/crm' },
