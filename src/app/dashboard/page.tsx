@@ -451,6 +451,7 @@ export default function DashboardPage() {
             { label: '🛒 Shopify', href: '/dashboard/shopify' },
             { label: '🧠 Diagnóstico IA', href: '/dashboard/diagnosis' },
             { label: '✅ Recomendações', href: '/dashboard/recommendations' },
+            { label: '🚀 Onboarding', href: '/onboarding' },
             { label: '🔔 Alertas', href: '/dashboard/alerts' },
             { label: '📄 Relatórios', href: '/dashboard/reports' },
             { label: '👥 CRM', href: '/dashboard/crm' },
