@@ -137,6 +137,26 @@ function dashboardUrl(range: DateRange, accountId?: string) {
   return query ? `/api/dashboard?${query}` : '/api/dashboard'
 }
 
+async function readDashboardResponse(res: Response) {
+  const text = await res.text()
+
+  if (!text) {
+    return {
+      success: false,
+      error: `A API do dashboard respondeu vazia. Status ${res.status}.`,
+    } satisfies DashboardResponse
+  }
+
+  try {
+    return JSON.parse(text) as DashboardResponse
+  } catch {
+    return {
+      success: false,
+      error: `A API do dashboard nao retornou JSON. Status ${res.status}.`,
+    } satisfies DashboardResponse
+  }
+}
+
 function formatCurrency(value: number, currency: string) {
   return new Intl.NumberFormat('pt-PT', {
     style: 'currency',
@@ -196,7 +216,7 @@ export default function DashboardPage() {
 
     try {
       const res = await fetch(dashboardUrl(range || { dateFrom, dateTo }, nextAccountId))
-      const data = (await res.json()) as DashboardResponse
+      const data = await readDashboardResponse(res)
 
       if (!res.ok || !data.success || !data.metrics || !data.campaigns) {
         setDashboardError(data.error || 'Erro ao carregar dashboard')
@@ -230,7 +250,7 @@ export default function DashboardPage() {
     const month = currentMonthRange()
 
     fetch(dashboardUrl(month, savedAccountId))
-      .then((res) => res.json() as Promise<DashboardResponse>)
+      .then(readDashboardResponse)
       .then((data) => {
         if (!active) return
 
