@@ -1,6 +1,7 @@
 import { auth, currentUser } from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
 import { resolveFacebookAccountName } from '@/lib/facebook-accounts'
+import { isWithinLimit, planFor } from '@/lib/plans'
 import { prisma } from '@/lib/prisma'
 import { fetchFacebookAdAccounts } from '@/services/windsor-service'
 
@@ -110,6 +111,14 @@ export async function POST(req: Request) {
 
   if (body.action === 'discover') {
     const discoveredAccounts = await fetchFacebookAdAccounts()
+    const plan = planFor(user.plan)
+    const currentAccounts = await prisma.adAccount.count({
+      where: { userId: user.id, windsorConnected: true },
+    })
+    let availableSlots =
+      plan.limits.accounts === -1
+        ? Number.POSITIVE_INFINITY
+        : Math.max(plan.limits.accounts - currentAccounts, 0)
 
     for (const discovered of discoveredAccounts) {
       const existingAccount = await prisma.adAccount.findUnique({
@@ -125,6 +134,11 @@ export async function POST(req: Request) {
           accountName: true,
         },
       })
+
+      if (!existingAccount && availableSlots <= 0) {
+        continue
+      }
+
       const accountName = resolveFacebookAccountName(
         discovered.accountId,
         discovered.accountName,
@@ -158,6 +172,10 @@ export async function POST(req: Request) {
           syncStatus: 'discovered',
         },
       })
+
+      if (!existingAccount && Number.isFinite(availableSlots)) {
+        availableSlots -= 1
+      }
 
     }
 
@@ -204,6 +222,34 @@ export async function POST(req: Request) {
     body.accountName,
     body.accountName
   )
+
+  const existingAccount = await prisma.adAccount.findUnique({
+    where: {
+      userId_platform_accountId: {
+        userId: user.id,
+        platform: 'facebook',
+        accountId: body.accountId,
+      },
+    },
+  })
+
+  if (!existingAccount) {
+    const plan = planFor(user.plan)
+    const currentAccounts = await prisma.adAccount.count({
+      where: { userId: user.id, windsorConnected: true },
+    })
+
+    if (!isWithinLimit(plan.limits.accounts, currentAccounts)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Seu plano ${plan.name} permite ${plan.limits.accounts} conta(s). Faça upgrade para adicionar mais.`,
+          upgradeRequired: true,
+        },
+        { status: 403 }
+      )
+    }
+  }
 
   const account = await prisma.adAccount.upsert({
     where: {
