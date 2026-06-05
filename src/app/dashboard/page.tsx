@@ -77,6 +77,7 @@ interface AIAnalysis {
 
 type DashboardResponse = {
   success: boolean
+  error?: string
   metrics?: DashboardMetrics
   campaigns?: Campaign[]
   purchaseBreakdown?: PurchaseBreakdownItem[]
@@ -169,6 +170,7 @@ export default function DashboardPage() {
   const [purchaseBreakdown, setPurchaseBreakdown] = useState<PurchaseBreakdownItem[]>([])
   const [realSales, setRealSales] = useState<RealSaleItem[]>([])
   const [loadingDashboard, setLoadingDashboard] = useState(true)
+  const [dashboardError, setDashboardError] = useState<string | null>(null)
   const [syncing, setSyncing] = useState(false)
   const [synced, setSynced] = useState(false)
   const [analyzing, setAnalyzing] = useState(false)
@@ -190,10 +192,17 @@ export default function DashboardPage() {
 
   async function loadDashboard(range?: DateRange, nextAccountId = accountId) {
     setLoadingDashboard(true)
-    const res = await fetch(dashboardUrl(range || { dateFrom, dateTo }, nextAccountId))
-    const data = (await res.json()) as DashboardResponse
+    setDashboardError(null)
 
-    if (data.success && data.metrics && data.campaigns) {
+    try {
+      const res = await fetch(dashboardUrl(range || { dateFrom, dateTo }, nextAccountId))
+      const data = (await res.json()) as DashboardResponse
+
+      if (!res.ok || !data.success || !data.metrics || !data.campaigns) {
+        setDashboardError(data.error || 'Erro ao carregar dashboard')
+        return
+      }
+
       setMetrics(data.metrics)
       setCampaigns(data.campaigns)
       setPurchaseBreakdown(data.purchaseBreakdown || [])
@@ -208,9 +217,11 @@ export default function DashboardPage() {
       }
       setAnalysis(null)
       setAnalysisSavedAt(null)
+    } catch (error) {
+      setDashboardError(error instanceof Error ? error.message : 'Erro ao carregar dashboard')
+    } finally {
+      setLoadingDashboard(false)
     }
-
-    setLoadingDashboard(false)
   }
 
   useEffect(() => {
@@ -236,6 +247,13 @@ export default function DashboardPage() {
           if (data.account?.accountId) {
             window.localStorage.setItem(SELECTED_ACCOUNT_STORAGE_KEY, data.account.accountId)
           }
+        } else {
+          setDashboardError(data.error || 'Erro ao carregar dashboard')
+        }
+      })
+      .catch((error) => {
+        if (active) {
+          setDashboardError(error instanceof Error ? error.message : 'Erro ao carregar dashboard')
         }
       })
       .finally(() => {
@@ -355,10 +373,34 @@ export default function DashboardPage() {
   const scoreColor = (s: number) =>
     s >= 70 ? 'text-green-400' : s >= 50 ? 'text-yellow-400' : 'text-red-400'
 
-  if (loadingDashboard || !metrics) {
+  if (loadingDashboard) {
     return (
       <div className="min-h-screen bg-gray-950 text-white flex items-center justify-center">
         Carregando dashboard...
+      </div>
+    )
+  }
+
+  if (dashboardError || !metrics) {
+    return (
+      <div className="min-h-screen bg-gray-950 text-white flex items-center justify-center p-6">
+        <div className="max-w-xl rounded-xl border border-red-800 bg-red-950/30 p-6">
+          <h1 className="text-xl font-bold text-red-200">Dashboard nao carregou</h1>
+          <p className="mt-3 text-sm text-red-100">
+            {dashboardError ||
+              'A API nao retornou as metricas. Verifique as variaveis de ambiente e o banco.'}
+          </p>
+          <p className="mt-3 text-sm text-gray-300">
+            Em producao, isso costuma acontecer quando falta `DATABASE_URL` na Vercel ou quando as
+            tabelas novas ainda nao foram aplicadas no Supabase.
+          </p>
+          <button
+            onClick={() => loadDashboard(currentMonthRange(), accountId)}
+            className="mt-5 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium hover:bg-indigo-700"
+          >
+            Tentar novamente
+          </button>
+        </div>
       </div>
     )
   }
