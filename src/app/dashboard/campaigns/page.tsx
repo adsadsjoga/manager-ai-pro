@@ -42,6 +42,18 @@ type DashboardResponse = {
   }
 }
 
+type MetaAdItem = {
+  campaignName: string | null
+  adName: string | null
+  effectiveStatus: string | null
+  status: string | null
+}
+
+type MetaAdsResponse = {
+  success: boolean
+  ads?: MetaAdItem[]
+}
+
 type HealthFilter = 'all' | 'healthy' | 'attention' | 'critical'
 type SortKey = 'spend' | 'purchases' | 'ctr' | 'cpc' | 'health'
 
@@ -51,6 +63,52 @@ function dashboardUrl(accountId?: string) {
   return accountId
     ? `/api/dashboard?accountId=${encodeURIComponent(accountId)}`
     : '/api/dashboard'
+}
+
+function metaAdsUrl(accountId?: string) {
+  return accountId
+    ? `/api/meta-ads?accountId=${encodeURIComponent(accountId)}`
+    : '/api/meta-ads'
+}
+
+function emptyCampaign(name: string): Campaign {
+  return {
+    name,
+    spend: 0,
+    revenue: 0,
+    leads: 0,
+    purchases: 0,
+    clicks: 0,
+    impressions: 0,
+    conversionRate: 0,
+    ctr: 0,
+    cpc: 0,
+    cpm: 0,
+    roas: 0,
+    frequency: 0,
+    health: 50,
+  }
+}
+
+function campaignsFromMetaAds(ads: MetaAdItem[]) {
+  const names = new Map<string, Campaign>()
+
+  for (const ad of ads) {
+    const name = ad.campaignName || ad.adName
+    if (!name) continue
+
+    if (!names.has(name)) {
+      names.set(name, emptyCampaign(name))
+    }
+
+    const campaign = names.get(name)
+    if (!campaign) continue
+
+    if (ad.effectiveStatus === 'ACTIVE') campaign.health = Math.max(campaign.health, 60)
+    if (ad.effectiveStatus === 'PENDING_REVIEW') campaign.health = Math.max(campaign.health, 55)
+  }
+
+  return Array.from(names.values())
 }
 
 function formatMoney(value: number, currency: string) {
@@ -97,26 +155,46 @@ export default function CampaignsPage() {
     NonNullable<DashboardResponse['account']>['accounts']
   >([])
 
+  async function getCampaignsData(nextAccountId?: string) {
+    const res = await fetch(dashboardUrl(nextAccountId))
+    const data = (await res.json()) as DashboardResponse
+
+    if (!data.success) return null
+
+    let nextCampaigns = data.campaigns || []
+
+    if (nextCampaigns.length === 0) {
+      const metaRes = await fetch(metaAdsUrl(data.account?.accountId || nextAccountId))
+      const metaData = (await metaRes.json()) as MetaAdsResponse
+      if (metaData.success) {
+        nextCampaigns = campaignsFromMetaAds(metaData.ads || [])
+      }
+    }
+
+    return { data, nextCampaigns, nextAccountId }
+  }
+
+  function applyCampaignsData(result: Awaited<ReturnType<typeof getCampaignsData>>) {
+    if (!result) return
+
+    setCampaigns(result.nextCampaigns)
+    setCurrency(result.data.account?.currency || 'EUR')
+    setAccountId(result.data.account?.accountId || result.nextAccountId || '')
+    setAccountName(result.data.account?.accountName || 'Conta Facebook')
+    setAccounts(result.data.account?.accounts || [])
+    if (result.data.account?.accountId) {
+      window.localStorage.setItem(SELECTED_ACCOUNT_STORAGE_KEY, result.data.account.accountId)
+    }
+    setSelectedName(result.nextCampaigns[0]?.name || null)
+  }
+
   useEffect(() => {
     let active = true
     const savedAccountId = window.localStorage.getItem(SELECTED_ACCOUNT_STORAGE_KEY) || ''
 
-    fetch(dashboardUrl(savedAccountId))
-      .then((res) => res.json() as Promise<DashboardResponse>)
-      .then((data) => {
-        if (!active) return
-
-        if (data.success && data.campaigns) {
-          setCampaigns(data.campaigns)
-          setCurrency(data.account?.currency || 'EUR')
-          setAccountId(data.account?.accountId || '')
-          setAccountName(data.account?.accountName || 'Conta Facebook')
-          setAccounts(data.account?.accounts || [])
-          if (data.account?.accountId) {
-            window.localStorage.setItem(SELECTED_ACCOUNT_STORAGE_KEY, data.account.accountId)
-          }
-          setSelectedName(data.campaigns[0]?.name || null)
-        }
+    getCampaignsData(savedAccountId)
+      .then((result) => {
+        if (active) applyCampaignsData(result)
       })
       .finally(() => {
         if (active) setLoading(false)
@@ -135,17 +213,8 @@ export default function CampaignsPage() {
     window.localStorage.setItem(SELECTED_ACCOUNT_STORAGE_KEY, nextAccountId)
 
     try {
-      const res = await fetch(dashboardUrl(nextAccountId))
-      const data = (await res.json()) as DashboardResponse
-
-      if (data.success && data.campaigns) {
-        setCampaigns(data.campaigns)
-        setCurrency(data.account?.currency || 'EUR')
-        setAccountId(data.account?.accountId || nextAccountId)
-        setAccountName(data.account?.accountName || 'Conta Facebook')
-        setAccounts(data.account?.accounts || accounts)
-        setSelectedName(data.campaigns[0]?.name || null)
-      }
+      const result = await getCampaignsData(nextAccountId)
+      applyCampaignsData(result)
     } finally {
       setLoading(false)
     }

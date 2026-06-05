@@ -1,13 +1,18 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Image from 'next/image'
 
 type DashboardMetrics = {
   spend: number
   revenue: number
+  metaRevenue?: number
+  realRevenue?: number
   roas: number
   leads: number
   purchases: number
+  metaPurchases?: number
+  realSales?: number
   clicks: number
   impressions: number
   conversionRate: number
@@ -40,6 +45,18 @@ type PurchaseBreakdownItem = {
   revenue: number
 }
 
+type RealSaleItem = {
+  id: string
+  provider: string
+  status: string
+  amount: number
+  currency: string
+  customerEmail: string | null
+  productName: string | null
+  campaignName: string | null
+  paidAt: string
+}
+
 interface AIAnalysis {
   health_score: number
   summary: string
@@ -63,9 +80,11 @@ type DashboardResponse = {
   metrics?: DashboardMetrics
   campaigns?: Campaign[]
   purchaseBreakdown?: PurchaseBreakdownItem[]
+  realSales?: RealSaleItem[]
   account?: {
     currency: string
     dataSource?: string
+    financialSource?: string
     accountId: string | null
     accountName: string | null
     accounts?: Array<{
@@ -95,6 +114,17 @@ type LatestAnalysisResponse = {
 
 const SELECTED_ACCOUNT_STORAGE_KEY = 'ads-manager:selected-account-id'
 
+function currentMonthRange(): DateRange {
+  const now = new Date()
+  const firstDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
+  const lastDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0))
+
+  return {
+    dateFrom: firstDay.toISOString().slice(0, 10),
+    dateTo: lastDay.toISOString().slice(0, 10),
+  }
+}
+
 function dashboardUrl(range: DateRange, accountId?: string) {
   const params = new URLSearchParams()
 
@@ -114,10 +144,30 @@ function formatCurrency(value: number, currency: string) {
   }).format(value)
 }
 
+const financialTooltip =
+  'O Facebook mede eventos do pixel e pode contar tentativas, duplicacoes ou eventos sem pagamento confirmado. As vendas reais vêm do checkout/pagamento aprovado e sao usadas para receita, ROAS e decisoes financeiras.'
+
+function MetricLabel({ label, help }: { label: string; help?: string }) {
+  return (
+    <div className="flex items-center gap-1">
+      <p className="text-gray-400 text-xs font-medium uppercase tracking-wide">{label}</p>
+      {help && (
+        <span
+          title={help}
+          className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-gray-600 text-[10px] text-gray-400 cursor-help"
+        >
+          ?
+        </span>
+      )}
+    </div>
+  )
+}
+
 export default function DashboardPage() {
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null)
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [purchaseBreakdown, setPurchaseBreakdown] = useState<PurchaseBreakdownItem[]>([])
+  const [realSales, setRealSales] = useState<RealSaleItem[]>([])
   const [loadingDashboard, setLoadingDashboard] = useState(true)
   const [syncing, setSyncing] = useState(false)
   const [synced, setSynced] = useState(false)
@@ -127,8 +177,8 @@ export default function DashboardPage() {
   const [aiError, setAiError] = useState<string | null>(null)
   const [syncMessage, setSyncMessage] = useState<string | null>(null)
   const [syncError, setSyncError] = useState<string | null>(null)
-  const [dateFrom, setDateFrom] = useState('')
-  const [dateTo, setDateTo] = useState('')
+  const [dateFrom, setDateFrom] = useState(() => currentMonthRange().dateFrom)
+  const [dateTo, setDateTo] = useState(() => currentMonthRange().dateTo)
   const [currency, setCurrency] = useState('EUR')
   const [dataSource, setDataSource] = useState('meta')
   const [accountId, setAccountId] = useState('')
@@ -136,7 +186,7 @@ export default function DashboardPage() {
   const [accounts, setAccounts] = useState<
     NonNullable<DashboardResponse['account']>['accounts']
   >([])
-  const [activePeriodLabel, setActivePeriodLabel] = useState('Todo período')
+  const [activePeriodLabel, setActivePeriodLabel] = useState('Mes atual')
 
   async function loadDashboard(range?: DateRange, nextAccountId = accountId) {
     setLoadingDashboard(true)
@@ -147,6 +197,7 @@ export default function DashboardPage() {
       setMetrics(data.metrics)
       setCampaigns(data.campaigns)
       setPurchaseBreakdown(data.purchaseBreakdown || [])
+      setRealSales(data.realSales || [])
       setCurrency(data.account?.currency || 'EUR')
       setDataSource(data.account?.dataSource || 'meta')
       setAccountId(data.account?.accountId || '')
@@ -165,8 +216,9 @@ export default function DashboardPage() {
   useEffect(() => {
     let active = true
     const savedAccountId = window.localStorage.getItem(SELECTED_ACCOUNT_STORAGE_KEY) || ''
+    const month = currentMonthRange()
 
-    fetch(dashboardUrl({ dateFrom: '', dateTo: '' }, savedAccountId))
+    fetch(dashboardUrl(month, savedAccountId))
       .then((res) => res.json() as Promise<DashboardResponse>)
       .then((data) => {
         if (!active) return
@@ -175,6 +227,7 @@ export default function DashboardPage() {
           setMetrics(data.metrics)
           setCampaigns(data.campaigns)
           setPurchaseBreakdown(data.purchaseBreakdown || [])
+          setRealSales(data.realSales || [])
           setCurrency(data.account?.currency || 'EUR')
           setDataSource(data.account?.dataSource || 'meta')
           setAccountId(data.account?.accountId || '')
@@ -249,10 +302,11 @@ export default function DashboardPage() {
   async function handleAccountChange(nextAccountId: string) {
     setAccountId(nextAccountId)
     window.localStorage.setItem(SELECTED_ACCOUNT_STORAGE_KEY, nextAccountId)
-    setActivePeriodLabel('Todo período')
-    setDateFrom('')
-    setDateTo('')
-    await loadDashboard({ dateFrom: '', dateTo: '' }, nextAccountId)
+    const month = currentMonthRange()
+    setActivePeriodLabel('Mes atual')
+    setDateFrom(month.dateFrom)
+    setDateTo(month.dateTo)
+    await loadDashboard(month, nextAccountId)
   }
 
   async function handleAnalyze() {
@@ -324,13 +378,15 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen bg-gray-950 text-white">
       <div className="fixed left-0 top-0 h-full w-64 bg-gray-900 border-r border-gray-800 p-6">
-        <div className="text-xl font-bold text-indigo-400 mb-8">⚡ Ads Manager AI</div>
+        <Image src="/logo.svg" alt="Ads Manager AI" width={220} height={48} className="mb-8" />
 
         <nav className="space-y-1">
           {[
             { label: '📊 Dashboard', href: '/dashboard', active: true },
             { label: '📣 Campanhas', href: '/dashboard/campaigns' },
+            { label: '💶 Vendas reais', href: '/dashboard/sales' },
             { label: '🎬 Criativos', href: '/dashboard/creatives' },
+            { label: '🛒 Shopify', href: '/dashboard/shopify' },
             { label: '🧠 Diagnóstico IA', href: '/dashboard/diagnosis' },
             { label: '✅ Recomendações', href: '/dashboard/recommendations' },
             { label: '🔔 Alertas', href: '/dashboard/alerts' },
@@ -465,19 +521,12 @@ export default function DashboardPage() {
 
           <div className="flex flex-wrap gap-2 mt-4">
             {[
-              { label: 'Todo período', range: { dateFrom: '', dateTo: '' } },
-              {
-                label: '22/06/2025',
-                range: { dateFrom: '2025-06-22', dateTo: '2025-06-22' },
-              },
+              { label: 'Mes atual', range: currentMonthRange() },
               {
                 label: 'Junho/2025',
                 range: { dateFrom: '2025-06-01', dateTo: '2025-06-30' },
               },
-              {
-                label: 'Outubro/2025',
-                range: { dateFrom: '2025-10-01', dateTo: '2025-10-31' },
-              },
+              { label: 'Todo período', range: { dateFrom: '', dateTo: '' } },
             ].map((item) => (
               <button
                 key={item.label}
@@ -522,9 +571,16 @@ export default function DashboardPage() {
                   : 'text-red-400',
             },
             {
-              label: 'Compras',
+              label: 'Vendas reais',
               value: metrics.purchases.toLocaleString('pt-BR'),
               color: metrics.purchases > 0 ? 'text-green-400' : 'text-red-400',
+              help: financialTooltip,
+            },
+            {
+              label: 'Eventos Meta',
+              value: String(metrics.metaPurchases || 0),
+              color: (metrics.metaPurchases || 0) > 0 ? 'text-yellow-400' : 'text-gray-400',
+              help: financialTooltip,
             },
             {
               label: 'Conversão',
@@ -557,9 +613,10 @@ export default function DashboardPage() {
                   : 'text-red-400',
             },
             {
-              label: 'Receita',
+              label: 'Receita real',
               value: formatCurrency(metrics.revenue, currency),
               color: metrics.revenue > 0 ? 'text-green-400' : 'text-gray-400',
+              help: financialTooltip,
             },
             {
               label: 'ROAS',
@@ -578,39 +635,79 @@ export default function DashboardPage() {
               key={m.label}
               className="bg-gray-900 border border-gray-800 rounded-xl p-5 hover:border-gray-600 transition-colors"
             >
-              <p className="text-gray-400 text-xs font-medium uppercase tracking-wide">{m.label}</p>
+              <MetricLabel label={m.label} help={m.help} />
               <p className={`text-2xl font-bold mt-2 ${m.color}`}>{m.value}</p>
             </div>
           ))}
         </div>
 
-        {metrics.purchases > 0 && (
+        {realSales.length > 0 && (
           <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden mb-6">
             <div className="px-5 py-4 border-b border-gray-800 flex items-center justify-between gap-4">
               <div>
-                <h2 className="font-semibold">Auditoria de compras</h2>
+                <h2 className="font-semibold">Vendas reais confirmadas</h2>
                 <p className="text-gray-400 text-xs mt-1">
-                  O total de {metrics.purchases} compras vem da soma destas linhas no período ativo.
+                  O total de {metrics.purchases} venda(s) vem de pagamentos aprovados no checkout.
                 </p>
               </div>
 
-              <button
-                onClick={() =>
-                  applyPeriod('22/06/2025', {
-                    dateFrom: '2025-06-22',
-                    dateTo: '2025-06-22',
-                  })
-                }
-                className="bg-gray-800 border border-gray-700 hover:border-indigo-500 px-3 py-2 rounded-lg text-xs text-gray-300 hover:text-white transition-colors"
-              >
-                Ver só 22/06/2025
-              </button>
             </div>
 
             <table className="w-full text-sm">
               <thead className="bg-gray-800/50">
                 <tr>
-                  {['Data', 'Campanha', 'Compras', 'Receita'].map((heading) => (
+                  {['Data', 'Cliente', 'Produto', 'Fonte', 'Receita'].map((heading) => (
+                    <th
+                      key={heading}
+                      className="text-left px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wide"
+                    >
+                      {heading}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+
+              <tbody>
+                {realSales.map((item) => (
+                  <tr
+                    key={item.id}
+                    className="border-t border-gray-800 hover:bg-gray-800/30 transition-colors"
+                  >
+                    <td className="px-4 py-3 text-gray-300">{item.paidAt.slice(0, 10)}</td>
+                    <td className="px-4 py-3 font-medium">{item.customerEmail || '-'}</td>
+                    <td className="px-4 py-3">{item.productName || '-'}</td>
+                    <td className="px-4 py-3 text-gray-400">{item.provider}</td>
+                    <td className="px-4 py-3">{formatCurrency(item.amount, item.currency || currency)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {(metrics.metaPurchases || 0) > 0 && (
+          <div className="bg-gray-900 border border-yellow-800/40 rounded-xl overflow-hidden mb-6">
+            <div className="px-5 py-4 border-b border-gray-800">
+              <h2 className="font-semibold flex items-center gap-2">
+                Eventos Meta
+                <span
+                  title={financialTooltip}
+                  className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-yellow-600 text-xs text-yellow-300 cursor-help"
+                >
+                  ?
+                </span>
+              </h2>
+              <p className="text-gray-400 text-xs mt-1">
+                O Facebook mede eventos do pixel e pode contar tentativas, duplicações ou eventos
+                sem pagamento confirmado. As vendas reais do checkout são a fonte usada para
+                receita e decisões financeiras.
+              </p>
+            </div>
+
+            <table className="w-full text-sm">
+              <thead className="bg-gray-800/50">
+                <tr>
+                  {['Data', 'Campanha', 'Eventos', 'Valor Meta'].map((heading) => (
                     <th
                       key={heading}
                       className="text-left px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wide"
@@ -629,10 +726,8 @@ export default function DashboardPage() {
                   >
                     <td className="px-4 py-3 text-gray-300">{item.date}</td>
                     <td className="px-4 py-3 font-medium">{item.campaignName}</td>
-                    <td className="px-4 py-3 text-green-400 font-semibold">{item.purchases}</td>
-                    <td className="px-4 py-3">
-                      {formatCurrency(item.revenue, currency)}
-                    </td>
+                    <td className="px-4 py-3 text-yellow-400 font-semibold">{item.purchases}</td>
+                    <td className="px-4 py-3">{formatCurrency(item.revenue, currency)}</td>
                   </tr>
                 ))}
               </tbody>

@@ -33,6 +33,22 @@ export type StripeSubscription = {
   }
 }
 
+export type StripeCharge = {
+  id: string
+  amount: number
+  currency: string
+  status: string
+  paid: boolean
+  created: number
+  description?: string | null
+  billing_details?: {
+    email?: string | null
+    name?: string | null
+  }
+  payment_intent?: string | null
+  metadata?: Record<string, string>
+}
+
 function stripeSecretKey() {
   const key = process.env.STRIPE_SECRET_KEY
   if (!key) throw new Error('STRIPE_SECRET_KEY nao configurada')
@@ -101,6 +117,32 @@ export async function createBillingPortalSession(params: {
   }
 
   return data
+}
+
+export async function listStripeCharges(params: { createdGte?: number; limit?: number }) {
+  const query = new URLSearchParams({
+    limit: String(params.limit || 100),
+  })
+
+  if (params.createdGte) {
+    query.set('created[gte]', String(params.createdGte))
+  }
+
+  const response = await fetch(`https://api.stripe.com/v1/charges?${query.toString()}`, {
+    headers: {
+      Authorization: `Bearer ${stripeSecretKey()}`,
+    },
+  })
+  const data = (await response.json()) as {
+    data?: StripeCharge[]
+    error?: { message?: string }
+  }
+
+  if (!response.ok || data.error) {
+    throw new Error(data.error?.message || 'Erro ao buscar pagamentos Stripe')
+  }
+
+  return data.data || []
 }
 
 export function verifyStripeSignature(payload: string, signature: string | null) {

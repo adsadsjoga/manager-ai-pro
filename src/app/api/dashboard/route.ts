@@ -122,6 +122,32 @@ export async function GET(req: Request) {
   )
 
   const campaigns = summarizeCampaigns(accountScopedMetrics)
+  const realSales = selectedAccount
+    ? await prisma.realSale.findMany({
+        where: {
+          userId,
+          adAccountId: selectedAccount.id,
+          status: 'paid',
+          ...(dateFrom || dateTo
+            ? {
+                paidAt: {
+                  ...(dateFrom ? { gte: dateFrom } : {}),
+                  ...(dateTo ? { lt: addDays(dateTo, 1) } : {}),
+                },
+              }
+            : {}),
+        },
+        orderBy: { paidAt: 'desc' },
+      })
+    : []
+  const realSalesTotals = realSales.reduce(
+    (acc, sale) => {
+      acc.sales += 1
+      acc.revenue += sale.amount
+      return acc
+    },
+    { sales: 0, revenue: 0 }
+  )
   const dataSource = accountScopedMetrics.some(
     (item) => metricSource(item.rawData) === 'meta'
   )
@@ -147,6 +173,7 @@ export async function GET(req: Request) {
     account: {
       currency,
       dataSource,
+      financialSource: realSales.length > 0 ? 'real_sales' : dataSource,
       accountId: selectedAccount?.accountId || null,
       accountName: selectedAccountName,
       accounts: adAccounts.map((account) => ({
@@ -161,15 +188,22 @@ export async function GET(req: Request) {
     },
     metrics: {
       spend: totals.spend,
-      revenue: totals.revenue,
-      roas: totals.spend > 0 ? totals.revenue / totals.spend : 0,
+      revenue: realSales.length > 0 ? realSalesTotals.revenue : totals.revenue,
+      metaRevenue: totals.revenue,
+      realRevenue: realSalesTotals.revenue,
+      roas:
+        totals.spend > 0
+          ? (realSales.length > 0 ? realSalesTotals.revenue : totals.revenue) / totals.spend
+          : 0,
       leads: totals.leads,
-      purchases: totals.purchases,
+      purchases: realSales.length > 0 ? realSalesTotals.sales : totals.purchases,
+      metaPurchases: totals.purchases,
+      realSales: realSalesTotals.sales,
       clicks: totals.clicks,
       impressions: totals.impressions,
       conversionRate:
         totals.clicks > 0
-          ? (totals.purchases / totals.clicks) * 100
+          ? ((realSales.length > 0 ? realSalesTotals.sales : totals.purchases) / totals.clicks) * 100
           : 0,
       ctr:
         totals.impressions > 0
@@ -186,5 +220,16 @@ export async function GET(req: Request) {
     },
     campaigns,
     purchaseBreakdown,
+    realSales: realSales.map((sale) => ({
+      id: sale.id,
+      provider: sale.provider,
+      status: sale.status,
+      amount: sale.amount,
+      currency: sale.currency,
+      customerEmail: sale.customerEmail,
+      productName: sale.productName,
+      campaignName: sale.campaignName,
+      paidAt: sale.paidAt.toISOString(),
+    })),
   })
 }
