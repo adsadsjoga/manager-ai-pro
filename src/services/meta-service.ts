@@ -11,6 +11,14 @@ type MetaPagingResponse<T> = {
   }
 }
 
+export type MetaAdAccount = {
+  id: string
+  name?: string
+  account_id?: string
+  currency?: string
+  account_status?: number
+}
+
 type MetaActionStat = {
   action_type?: string
   value?: string | number
@@ -282,6 +290,28 @@ export async function fetchMetaAdsForAccount(accountId: string) {
   }
 
   return ads.map(normalizeAd)
+}
+
+export async function fetchMetaAdAccounts() {
+  const fields = ['id', 'name', 'account_id', 'currency', 'account_status'].join(',')
+  const params = new URLSearchParams({
+    access_token: META_ACCESS_TOKEN || '',
+    fields,
+    limit: '100',
+  })
+  let nextUrl = `https://graph.facebook.com/${META_API_VERSION}/me/adaccounts?${params.toString()}`
+  const accounts: MetaAdAccount[] = []
+
+  while (nextUrl) {
+    const json = await metaFetch<MetaPagingResponse<MetaAdAccount>>(nextUrl)
+    accounts.push(...(json.data || []))
+    nextUrl = json.paging?.next || ''
+  }
+
+  return accounts.map((account) => ({
+    ...account,
+    account_id: account.account_id || account.id.replace(/^act_/, ''),
+  }))
 }
 
 export async function fetchMetaInsightsForAccount(params: {

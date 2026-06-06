@@ -78,6 +78,31 @@ function actionLabel(action: Recommendation['action']) {
   return labels[action]
 }
 
+function MetricLabel({ label, help }: { label: string; help?: string }) {
+  return (
+    <div className="flex items-center gap-1">
+      <p className="text-gray-400 text-xs uppercase tracking-wide">{label}</p>
+      {help && (
+        <span
+          title={help}
+          className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-gray-600 text-[10px] text-gray-400 cursor-help"
+        >
+          ?
+        </span>
+      )}
+    </div>
+  )
+}
+
+const forecastHelp: Record<string, string> = {
+  'Gasto atual': 'Investimento ja registrado no periodo usado pela previsao.',
+  'ProjeÃ§Ã£o mensal': 'Estimativa simples: ritmo atual de gasto projetado ate o fim do mes.',
+  'OrÃ§amento sugerido':
+    'Sugestao baseada no gasto atual, volume de dados e sinais de performance. Nao e garantia de resultado; serve como referencia para testar com cuidado.',
+  'Compras estimadas':
+    'Estimativa calculada a partir do historico atual de compras por euro investido.',
+}
+
 export default function RecommendationsPage() {
   const [accounts, setAccounts] = useState<AdAccountItem[]>([])
   const [accountId, setAccountId] = useState('')
@@ -246,7 +271,7 @@ export default function RecommendationsPage() {
               },
             ].map((metric) => (
               <div key={metric.label} className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-                <p className="text-gray-400 text-xs uppercase tracking-wide">{metric.label}</p>
+                <MetricLabel label={metric.label} help={forecastHelp[metric.label]} />
                 <p className={`text-2xl font-bold mt-2 ${metric.color}`}>{metric.value}</p>
               </div>
             ))}

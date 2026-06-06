@@ -14,6 +14,11 @@ type ShopifyStore = {
   shopDomain: string
   storeName: string | null
   currency: string
+  adAccountId?: string | null
+  adAccount?: {
+    accountId: string
+    accountName: string | null
+  } | null
   syncStatus: string
   syncError: string | null
   lastSyncAt: string | null
@@ -63,18 +68,41 @@ function statusLabel(status: string) {
   return 'nao conectada'
 }
 
+function statusDescription(store: ShopifyStore) {
+  if (store.syncStatus === 'connected') {
+    return store.lastSyncAt
+      ? `Ultima sincronizacao: ${new Intl.DateTimeFormat('pt-BR', {
+          day: '2-digit',
+          month: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+        }).format(new Date(store.lastSyncAt))}`
+      : 'Loja pronta para sincronizar.'
+  }
+
+  if (store.syncStatus === 'needs_token') return 'Conecte a loja pela autorizacao da Shopify.'
+  if (store.syncStatus === 'syncing') return 'Sincronizacao em andamento.'
+  if (store.syncStatus === 'error') return store.syncError || 'Falha na ultima sincronizacao.'
+  return 'Loja ainda nao conectada.'
+}
+
+function isShopifyNotFoundError(error?: string | null) {
+  return Boolean(error?.toLowerCase().includes('not found') || error?.toLowerCase().includes('nao encontrada'))
+}
+
 export default function ShopifyPage() {
   const [accounts, setAccounts] = useState<AdAccountItem[]>([])
   const [stores, setStores] = useState<ShopifyStore[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [syncingStoreId, setSyncingStoreId] = useState<string | null>(null)
+  const [deletingStoreId, setDeletingStoreId] = useState<string | null>(null)
+  const [editingStoreId, setEditingStoreId] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [form, setForm] = useState({
     shopDomain: '',
     storeName: '',
-    accessToken: '',
     adAccountId: '',
     currency: 'EUR',
   })
@@ -109,6 +137,20 @@ export default function ShopifyPage() {
           adAccountId: selected?.accountId || '',
           currency: selected?.currency || 'EUR',
         }))
+
+        const params = new URLSearchParams(window.location.search)
+        if (params.get('connected') === '1') {
+          setMessage('Shopify conectada. Agora clique em Sincronizar para puxar produtos e pedidos.')
+        }
+        const oauthError = params.get('error')
+        if (oauthError) {
+          const friendlyErrors: Record<string, string> = {
+            shop_domain: 'Use o dominio interno da Shopify, no formato sua-loja.myshopify.com.',
+            shopify_env:
+              'Configura SHOPIFY_CLIENT_ID e SHOPIFY_CLIENT_SECRET na Vercel antes de conectar.',
+          }
+          setError(friendlyErrors[oauthError] || oauthError)
+        }
       })
       .finally(() => {
         if (active) setLoading(false)
@@ -130,6 +172,7 @@ export default function ShopifyPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'save',
+          storeId: editingStoreId,
           ...form,
         }),
       })
@@ -140,12 +183,56 @@ export default function ShopifyPage() {
         return
       }
 
-      setMessage('Loja salva. Proximo passo: ativar sincronizacao de produtos e pedidos.')
-      setForm((current) => ({ ...current, accessToken: '' }))
+      setMessage(
+        editingStoreId
+          ? 'Loja atualizada. Agora voce pode sincronizar novamente.'
+          : 'Loja salva. Proximo passo: sincronizar produtos e pedidos.'
+      )
+      setEditingStoreId(null)
       await loadShopify()
     } finally {
       setSaving(false)
     }
+  }
+
+  function editStore(store: ShopifyStore) {
+    setEditingStoreId(store.id)
+    setMessage(null)
+    setError(null)
+    setForm({
+      shopDomain: store.shopDomain,
+      storeName: store.storeName || '',
+      adAccountId: store.adAccount?.accountId || form.adAccountId,
+      currency: store.currency || 'EUR',
+    })
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  function cancelEdit() {
+    setEditingStoreId(null)
+    setForm((current) => ({
+      ...current,
+      shopDomain: '',
+      storeName: '',
+    }))
+  }
+
+  function connectShopify() {
+    setMessage(null)
+    setError(null)
+
+    if (!form.shopDomain.includes('.myshopify.com')) {
+      setError('Use o dominio interno da Shopify, no formato sua-loja.myshopify.com.')
+      return
+    }
+
+    const params = new URLSearchParams({
+      shop: form.shopDomain,
+      storeName: form.storeName,
+      adAccountId: form.adAccountId,
+      currency: form.currency,
+    })
+    window.location.href = `/api/shopify/connect?${params.toString()}`
   }
 
   async function syncStore(storeId: string) {
@@ -181,6 +268,42 @@ export default function ShopifyPage() {
     }
   }
 
+  async function deleteStore(store: ShopifyStore) {
+    const storeName = store.storeName || store.shopDomain
+    const confirmed = window.confirm(
+      `Excluir a loja "${storeName}" do Ads Manager AI? Isso remove produtos e pedidos sincronizados desta loja.`
+    )
+
+    if (!confirmed) return
+
+    setDeletingStoreId(store.id)
+    setMessage(null)
+    setError(null)
+
+    try {
+      const res = await fetch('/api/shopify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'delete',
+          storeId: store.id,
+        }),
+      })
+      const data = (await res.json()) as ShopifyResponse
+
+      if (!data.success) {
+        setError(data.error || 'Erro ao excluir loja Shopify')
+        return
+      }
+
+      if (editingStoreId === store.id) cancelEdit()
+      setMessage(`Loja "${storeName}" excluida.`)
+      await loadShopify()
+    } finally {
+      setDeletingStoreId(null)
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-950 text-white flex items-center justify-center">
@@ -200,6 +323,11 @@ export default function ShopifyPage() {
             { label: 'Vendas reais', href: '/dashboard/sales' },
             { label: 'Criativos', href: '/dashboard/creatives' },
             { label: 'Shopify', href: '/dashboard/shopify', active: true },
+            { label: 'Diagnostico IA', href: '/dashboard/diagnosis' },
+            { label: 'Recomendacoes', href: '/dashboard/recommendations' },
+            { label: 'Alertas', href: '/dashboard/alerts' },
+            { label: 'Relatorios', href: '/dashboard/reports' },
+            { label: 'CRM', href: '/dashboard/crm' },
             { label: 'Configuracoes', href: '/dashboard/settings' },
           ].map((item) => (
             <a
@@ -216,11 +344,20 @@ export default function ShopifyPage() {
       </div>
 
       <main className="ml-64 p-8">
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold">Shopify</h1>
-          <p className="text-gray-400 text-sm mt-1">
-            Base para analisar loja, produtos, pedidos e receita junto com os anuncios.
-          </p>
+        <div className="mb-8 flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold">Shopify</h1>
+            <p className="text-gray-400 text-sm mt-1">
+              Base para analisar loja, produtos, pedidos e receita junto com os anuncios.
+            </p>
+          </div>
+
+          <a
+            href="/dashboard"
+            className="rounded-lg bg-gray-800 px-4 py-2 text-sm text-white hover:bg-gray-700"
+          >
+            Dashboard
+          </a>
         </div>
 
         {message && (
@@ -237,10 +374,22 @@ export default function ShopifyPage() {
 
         <div className="grid grid-cols-[1fr_0.9fr] gap-6">
           <section className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-            <h2 className="font-semibold mb-2">Conectar loja</h2>
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <h2 className="font-semibold">
+                {editingStoreId ? 'Editar loja' : 'Conectar loja'}
+              </h2>
+              {editingStoreId && (
+                <button
+                  onClick={cancelEdit}
+                  className="rounded-lg border border-gray-700 px-3 py-1 text-xs text-gray-300 hover:border-gray-500 hover:text-white"
+                >
+                  Cancelar edicao
+                </button>
+              )}
+            </div>
             <p className="text-sm text-gray-400 mb-5">
-              Use o dominio myshopify.com e o token privado da loja quando formos ativar a
-              sincronizacao.
+              Use o dominio interno myshopify.com da loja. O token sera criado pela
+              autorizacao da Shopify, sem o cliente copiar senha manualmente.
             </p>
 
             <div className="grid grid-cols-2 gap-4">
@@ -262,6 +411,11 @@ export default function ShopifyPage() {
                   placeholder="sua-loja.myshopify.com"
                   className="mt-2 w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm"
                 />
+                {form.shopDomain && !form.shopDomain.includes('.myshopify.com') && (
+                  <span className="mt-2 block text-xs text-yellow-300">
+                    Para sincronizar, use o dominio interno da Shopify, nao o dominio publico.
+                  </span>
+                )}
               </label>
 
               <label className="block">
@@ -302,26 +456,24 @@ export default function ShopifyPage() {
                   ))}
                 </select>
               </label>
-
-              <label className="block col-span-2">
-                <span className="text-xs text-gray-400 uppercase">Admin access token</span>
-                <input
-                  value={form.accessToken}
-                  onChange={(event) => setForm({ ...form, accessToken: event.target.value })}
-                  type="password"
-                  placeholder="shpat_..."
-                  className="mt-2 w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm"
-                />
-              </label>
             </div>
 
-            <button
-              onClick={saveStore}
-              disabled={saving || !form.shopDomain}
-              className="mt-5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 rounded-lg px-5 py-2 text-sm font-medium"
-            >
-              {saving ? 'Salvando...' : 'Salvar Shopify'}
-            </button>
+            <div className="mt-5 flex flex-wrap gap-3">
+              <button
+                onClick={connectShopify}
+                disabled={!form.shopDomain}
+                className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 rounded-lg px-5 py-2 text-sm font-medium"
+              >
+                Conectar com Shopify
+              </button>
+              <button
+                onClick={saveStore}
+                disabled={saving || !form.shopDomain}
+                className="rounded-lg border border-gray-700 px-5 py-2 text-sm font-medium text-gray-200 hover:border-gray-500 hover:text-white disabled:opacity-50"
+              >
+                {saving ? 'Salvando...' : editingStoreId ? 'Salvar dados' : 'Salvar sem conectar'}
+              </button>
+            </div>
           </section>
 
           <section className="bg-gray-900 border border-gray-800 rounded-xl p-6">
@@ -368,9 +520,16 @@ export default function ShopifyPage() {
             </thead>
             <tbody>
               {stores.map((store) => (
-                <tr key={store.id} className="border-t border-gray-800">
+                <tr key={store.id} className="border-t border-gray-800 align-top">
                   <td className="px-4 py-3 font-medium">{store.storeName || store.shopDomain}</td>
-                  <td className="px-4 py-3 text-gray-400">{store.shopDomain}</td>
+                  <td className="px-4 py-3 text-gray-400">
+                    <div>{store.shopDomain}</div>
+                    {!store.shopDomain.endsWith('.myshopify.com') && (
+                      <div className="mt-1 text-xs text-yellow-300">
+                        Troque pelo dominio interno .myshopify.com
+                      </div>
+                    )}
+                  </td>
                   <td className="px-4 py-3">
                     <span
                       className={`inline-flex rounded-full px-3 py-1 text-xs ${statusTone(
@@ -379,19 +538,49 @@ export default function ShopifyPage() {
                     >
                       {statusLabel(store.syncStatus)}
                     </span>
+                    <p className="mt-2 max-w-xs text-xs text-gray-400">
+                      {statusDescription(store)}
+                    </p>
                   </td>
                   <td className="px-4 py-3">{store._count?.products || 0}</td>
                   <td className="px-4 py-3">{store._count?.orders || 0}</td>
                   <td className="px-4 py-3">
-                    <button
-                      onClick={() => syncStore(store.id)}
-                      disabled={syncingStoreId === store.id || store.syncStatus === 'needs_token'}
-                      className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
-                    >
-                      {syncingStoreId === store.id ? 'Sincronizando...' : 'Sincronizar Shopify'}
-                    </button>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        onClick={() => editStore(store)}
+                        className="rounded-lg border border-gray-700 px-3 py-1.5 text-xs font-medium text-gray-200 hover:border-gray-500 hover:text-white"
+                      >
+                        Editar
+                      </button>
+                      <button
+                        onClick={() => syncStore(store.id)}
+                        disabled={
+                          syncingStoreId === store.id ||
+                          store.syncStatus === 'needs_token' ||
+                          !store.shopDomain.endsWith('.myshopify.com')
+                        }
+                        className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+                      >
+                        {syncingStoreId === store.id ? 'Sincronizando...' : 'Sincronizar'}
+                      </button>
+                      <button
+                        onClick={() => deleteStore(store)}
+                        disabled={deletingStoreId === store.id}
+                        className="rounded-lg border border-red-800/60 px-3 py-1.5 text-xs font-medium text-red-200 hover:bg-red-950/40 disabled:opacity-50"
+                      >
+                        {deletingStoreId === store.id ? 'Excluindo...' : 'Excluir'}
+                      </button>
+                    </div>
                     {store.syncError && (
-                      <p className="mt-2 text-xs text-red-300">{store.syncError}</p>
+                      <div className="mt-2 max-w-sm rounded-lg border border-red-800/50 bg-red-950/30 px-3 py-2 text-xs text-red-200">
+                        <p>{store.syncError}</p>
+                        {isShopifyNotFoundError(store.syncError) && (
+                          <p className="mt-1 text-red-100/80">
+                            Dica: abra Shopify Admin, va em Settings &gt; Domains e copie o
+                            dominio interno que termina em .myshopify.com.
+                          </p>
+                        )}
+                      </div>
                     )}
                   </td>
                 </tr>

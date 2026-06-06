@@ -167,6 +167,16 @@ function formatCurrency(value: number, currency: string) {
 
 const financialTooltip =
   'O Facebook mede eventos do pixel e pode contar tentativas, duplicacoes ou eventos sem pagamento confirmado. As vendas reais vêm do checkout/pagamento aprovado e sao usadas para receita, ROAS e decisoes financeiras.'
+const metricHelp = {
+  ctr: 'Percentual de pessoas que clicaram depois de ver o anuncio. Formula: cliques divididos por impressoes.',
+  conversion:
+    'Percentual de cliques que viraram venda real confirmada. Formula: vendas reais divididas por cliques.',
+  cpc: 'Custo medio por clique. Formula: investimento dividido por cliques.',
+  cpm: 'Custo para mil impressoes. Formula: investimento dividido por impressoes e multiplicado por 1000.',
+  roas: 'Retorno sobre gasto em anuncios. Formula: receita real confirmada dividida pelo investimento.',
+  campaigns: 'Quantidade de campanhas com metricas no periodo selecionado.',
+  healthy: 'Campanhas com score de saude igual ou acima de 70/100.',
+} as const
 
 function MetricLabel({ label, help }: { label: string; help?: string }) {
   return (
@@ -632,6 +642,7 @@ export default function DashboardPage() {
                   : metrics.ctr >= 2
                   ? 'text-yellow-400'
                   : 'text-red-400',
+              help: metricHelp.ctr,
             },
             {
               label: 'Vendas reais',
@@ -654,6 +665,7 @@ export default function DashboardPage() {
                   : metrics.conversionRate >= 0.5
                   ? 'text-yellow-400'
                   : 'text-red-400',
+              help: metricHelp.conversion,
             },
             {
               label: 'CPC',
@@ -664,6 +676,7 @@ export default function DashboardPage() {
                   : metrics.cpc <= 0.30
                   ? 'text-yellow-400'
                   : 'text-red-400',
+              help: metricHelp.cpc,
             },
             {
               label: 'CPM',
@@ -674,6 +687,7 @@ export default function DashboardPage() {
                   : metrics.cpm <= 12
                   ? 'text-yellow-400'
                   : 'text-red-400',
+              help: metricHelp.cpm,
             },
             {
               label: 'Receita real',
@@ -690,9 +704,20 @@ export default function DashboardPage() {
                   : metrics.roas >= 1.5
                   ? 'text-yellow-400'
                   : 'text-gray-400',
+              help: metricHelp.roas,
             },
-            { label: 'Campanhas', value: String(totalCampaigns), color: 'text-white' },
-            { label: 'Saudáveis', value: String(healthyCampaigns), color: 'text-green-400' },
+            {
+              label: 'Campanhas',
+              value: String(totalCampaigns),
+              color: 'text-white',
+              help: metricHelp.campaigns,
+            },
+            {
+              label: 'Saudáveis',
+              value: String(healthyCampaigns),
+              color: 'text-green-400',
+              help: metricHelp.healthy,
+            },
           ].map((m) => (
             <div
               key={m.label}

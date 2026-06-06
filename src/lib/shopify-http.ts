@@ -1,6 +1,6 @@
 type ShopifyGraphqlResponse<T> = {
   data?: T
-  errors?: Array<{ message: string }>
+  errors?: unknown
 }
 
 export type ShopifyShop = {
@@ -84,12 +84,44 @@ function normalizeShopDomain(shopDomain: string) {
     .toLowerCase()
 }
 
+function validateAdminDomain(shopDomain: string) {
+  if (!shopDomain.endsWith('.myshopify.com')) {
+    throw new Error(
+      'Use o dominio interno da Shopify, no formato sua-loja.myshopify.com. O dominio publico da loja nao funciona para a Admin API.'
+    )
+  }
+}
+
 function gidToId(gid: string) {
   return gid.split('/').pop() || gid
 }
 
 export function shopifyNodeId(gid: string) {
   return gidToId(gid)
+}
+
+function formatShopifyErrors(errors: unknown) {
+  if (!errors) return ''
+
+  if (Array.isArray(errors)) {
+    return errors
+      .map((error) => {
+        if (typeof error === 'string') return error
+        if (error && typeof error === 'object' && 'message' in error) {
+          return String((error as { message?: unknown }).message || 'Erro Shopify')
+        }
+        return JSON.stringify(error)
+      })
+      .join(' | ')
+  }
+
+  if (typeof errors === 'string') return errors
+
+  if (errors && typeof errors === 'object' && 'message' in errors) {
+    return String((errors as { message?: unknown }).message || 'Erro Shopify')
+  }
+
+  return JSON.stringify(errors)
 }
 
 async function shopifyGraphql<T>(params: {
@@ -99,6 +131,7 @@ async function shopifyGraphql<T>(params: {
   variables?: Record<string, unknown>
 }) {
   const shopDomain = normalizeShopDomain(params.shopDomain)
+  validateAdminDomain(shopDomain)
   const response = await fetch(
     `https://${shopDomain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`,
     {
@@ -122,11 +155,24 @@ async function shopifyGraphql<T>(params: {
     throw new Error(`Shopify respondeu ${response.status}: ${text.slice(0, 180)}`)
   }
 
-  if (!response.ok || data.errors?.length) {
-    const errorMessage =
-      data.errors?.map((error) => error.message).join(' | ') ||
-      `Shopify respondeu ${response.status}`
-    throw new Error(errorMessage)
+  const errorMessage = formatShopifyErrors(data.errors)
+
+  if (!response.ok || errorMessage) {
+    if (response.status === 401) {
+      throw new Error('Token da Shopify invalido ou sem permissao. Gere um Admin API access token com permissao de produtos e pedidos.')
+    }
+
+    if (response.status === 403) {
+      throw new Error('Token da Shopify sem permissao suficiente. Revise as permissoes de produtos e pedidos no app privado/custom app.')
+    }
+
+    if (response.status === 404) {
+      throw new Error(
+        'Loja Shopify nao encontrada. Confira o dominio interno exato da loja em Settings > Domains no admin da Shopify. Ele precisa terminar em .myshopify.com.'
+      )
+    }
+
+    throw new Error(errorMessage || `Shopify respondeu ${response.status}`)
   }
 
   if (!data.data) throw new Error('Shopify nao retornou dados')

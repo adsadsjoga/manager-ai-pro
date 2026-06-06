@@ -54,6 +54,21 @@ type AdAccountsResponse = {
   error?: string
 }
 
+type MetaTokenAccount = {
+  id: string
+  name?: string
+  account_id?: string
+  currency?: string
+  account_status?: number
+}
+
+type MetaTokenCheckResponse = {
+  success: boolean
+  accounts?: MetaTokenAccount[]
+  total?: number
+  error?: string
+}
+
 export default function SettingsPage() {
   const [windsorConfigured, setWindsorConfigured] = useState(false)
   const [anthropicConfigured, setAnthropicConfigured] = useState(false)
@@ -70,6 +85,9 @@ export default function SettingsPage() {
   const [adAccounts, setAdAccounts] = useState<AdAccountItem[]>([])
   const [discoveringAccounts, setDiscoveringAccounts] = useState(false)
   const [syncingAccountId, setSyncingAccountId] = useState<string | null>(null)
+  const [checkingMetaToken, setCheckingMetaToken] = useState(false)
+  const [metaTokenAccounts, setMetaTokenAccounts] = useState<MetaTokenAccount[]>([])
+  const [metaTokenError, setMetaTokenError] = useState<string | null>(null)
   const [newAccount, setNewAccount] = useState({
     accountName: '',
     accountId: '',
@@ -156,6 +174,26 @@ export default function SettingsPage() {
 
     setSaved(true)
     setTimeout(() => setSaved(false), 2500)
+  }
+
+  async function checkMetaToken() {
+    setCheckingMetaToken(true)
+    setMetaTokenError(null)
+    setMetaTokenAccounts([])
+
+    try {
+      const res = await fetch('/api/meta-token-check')
+      const data = (await res.json()) as MetaTokenCheckResponse
+
+      if (!data.success) {
+        setMetaTokenError(data.error || 'Erro ao verificar token Meta')
+        return
+      }
+
+      setMetaTokenAccounts(data.accounts || [])
+    } finally {
+      setCheckingMetaToken(false)
+    }
   }
 
   function updateRule(id: string, update: Partial<AlertRule>) {
@@ -570,6 +608,53 @@ export default function SettingsPage() {
             <div className="bg-gray-800 rounded-lg p-4 text-sm text-gray-300">
               Use META_ACCESS_TOKEN para puxar anuncios, copies, criativos, status e metricas de
               video direto da Meta.
+            </div>
+            <div className="mt-4 rounded-lg border border-gray-800 bg-gray-950/40 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-semibold">Acesso do token</h3>
+                  <p className="mt-1 text-xs text-gray-400">
+                    Verifica quais contas de anuncio esse token consegue enxergar na Meta.
+                  </p>
+                </div>
+                <button
+                  onClick={checkMetaToken}
+                  disabled={checkingMetaToken || !metaConfigured}
+                  className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+                >
+                  {checkingMetaToken ? 'Verificando...' : 'Verificar token'}
+                </button>
+              </div>
+
+              {metaTokenError && (
+                <p className="mt-3 rounded-lg border border-red-700/50 bg-red-900/20 px-3 py-2 text-xs text-red-300">
+                  {metaTokenError}
+                </p>
+              )}
+
+              {metaTokenAccounts.length > 0 && (
+                <div className="mt-3 space-y-2">
+                  <p className="text-xs text-green-300">
+                    Token conectado. A Meta devolveu {metaTokenAccounts.length} conta(s).
+                  </p>
+                  <div className="max-h-44 overflow-auto rounded-lg border border-gray-800">
+                    {metaTokenAccounts.map((account) => (
+                      <div
+                        key={account.id}
+                        className="flex items-center justify-between gap-3 border-b border-gray-800 px-3 py-2 last:border-b-0"
+                      >
+                        <div>
+                          <p className="text-sm font-medium">{account.name || account.id}</p>
+                          <p className="text-xs text-gray-500">
+                            {account.account_id || account.id.replace('act_', '')}
+                          </p>
+                        </div>
+                        <span className="text-xs text-gray-400">{account.currency || 'EUR'}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </section>
 

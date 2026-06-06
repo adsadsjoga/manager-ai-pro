@@ -4,7 +4,8 @@ import { ensureAppUser } from '@/lib/current-user'
 import { prisma } from '@/lib/prisma'
 
 type ShopifyBody = {
-  action?: 'save' | 'disconnect'
+  action?: 'save' | 'disconnect' | 'delete'
+  storeId?: string
   shopDomain?: string
   storeName?: string
   accessToken?: string
@@ -42,6 +43,12 @@ export async function GET() {
       syncError: true,
       lastSyncAt: true,
       adAccountId: true,
+      adAccount: {
+        select: {
+          accountId: true,
+          accountName: true,
+        },
+      },
       _count: {
         select: {
           products: true,
@@ -70,6 +77,33 @@ export async function POST(req: Request) {
 
   const user = await ensureAppUser(userId)
   const body = (await req.json()) as ShopifyBody
+
+  if (body.action === 'delete' && body.storeId) {
+    const existingStore = await prisma.shopifyStore.findFirst({
+      where: {
+        id: body.storeId,
+        userId: user.id,
+      },
+      select: {
+        id: true,
+      },
+    })
+
+    if (!existingStore) {
+      return NextResponse.json(
+        { success: false, error: 'Loja Shopify nao encontrada' },
+        { status: 404 }
+      )
+    }
+
+    await prisma.shopifyStore.delete({
+      where: {
+        id: existingStore.id,
+      },
+    })
+
+    return NextResponse.json({ success: true })
+  }
 
   if (body.action === 'disconnect' && body.shopDomain) {
     await prisma.shopifyStore.updateMany({
@@ -107,6 +141,52 @@ export async function POST(req: Request) {
       })
     : null
 
+  if (body.storeId) {
+    const existingStore = await prisma.shopifyStore.findFirst({
+      where: {
+        id: body.storeId,
+        userId: user.id,
+      },
+      select: {
+        id: true,
+        accessTokenEnc: true,
+      },
+    })
+
+    if (!existingStore) {
+      return NextResponse.json(
+        { success: false, error: 'Loja Shopify nao encontrada' },
+        { status: 404 }
+      )
+    }
+
+    const store = await prisma.shopifyStore.update({
+      where: {
+        id: body.storeId,
+      },
+      data: {
+        shopDomain,
+        storeName: body.storeName || shopDomain,
+        currency: body.currency || adAccount?.currency || 'EUR',
+        adAccountId: adAccount?.id || null,
+        ...(body.accessToken ? { accessTokenEnc: body.accessToken } : {}),
+        syncStatus: body.accessToken || existingStore.accessTokenEnc ? 'connected' : 'needs_token',
+        syncError: null,
+      },
+      select: {
+        id: true,
+        shopDomain: true,
+        storeName: true,
+        currency: true,
+        syncStatus: true,
+        lastSyncAt: true,
+        adAccountId: true,
+      },
+    })
+
+    return NextResponse.json({ success: true, store })
+  }
+
   const store = await prisma.shopifyStore.upsert({
     where: {
       userId_shopDomain: {
@@ -119,7 +199,7 @@ export async function POST(req: Request) {
       currency: body.currency || adAccount?.currency || 'EUR',
       adAccountId: adAccount?.id || null,
       ...(body.accessToken ? { accessTokenEnc: body.accessToken } : {}),
-      syncStatus: body.accessToken ? 'connected' : 'needs_token',
+      syncStatus: body.accessToken ? 'connected' : undefined,
       syncError: null,
     },
     create: {

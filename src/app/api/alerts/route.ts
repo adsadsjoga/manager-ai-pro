@@ -24,6 +24,14 @@ export async function GET() {
       },
       isResolved: false,
     },
+    include: {
+      adAccount: {
+        select: {
+          accountName: true,
+          accountId: true,
+        },
+      },
+    },
     orderBy: {
       createdAt: 'desc',
     },

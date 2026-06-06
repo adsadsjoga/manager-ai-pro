@@ -50,6 +50,46 @@ function formatMoney(value: number, currency: string) {
   }).format(value)
 }
 
+function statusConfig(status: string) {
+  if (status === 'paid') {
+    return {
+      label: 'Pago',
+      className: 'bg-green-500/15 text-green-300 border-green-500/30',
+      description: 'Pagamento aprovado e usado na receita real.',
+    }
+  }
+
+  if (status === 'failed') {
+    return {
+      label: 'Falhou',
+      className: 'bg-red-500/15 text-red-300 border-red-500/30',
+      description: 'Tentativa recusada. Nao entra na receita real.',
+    }
+  }
+
+  if (status === 'refunded') {
+    return {
+      label: 'Reembolsado',
+      className: 'bg-yellow-500/15 text-yellow-300 border-yellow-500/30',
+      description: 'Pagamento devolvido. Revise antes de contar como receita.',
+    }
+  }
+
+  return {
+    label: status || 'Outro',
+    className: 'bg-gray-700 text-gray-300 border-gray-600',
+    description: 'Status importado do provedor de pagamento.',
+  }
+}
+
+function providerLabel(provider: string) {
+  if (provider === 'stripe') return 'Stripe'
+  if (provider === 'shopify') return 'Shopify'
+  if (provider === 'payhip') return 'Payhip'
+  if (provider === 'manual') return 'Manual'
+  return provider
+}
+
 export default function SalesPage() {
   const [accounts, setAccounts] = useState<AdAccountItem[]>([])
   const [accountId, setAccountId] = useState('')
@@ -69,6 +109,7 @@ export default function SalesPage() {
   })
 
   const paidSales = sales.filter((sale) => sale.status === 'paid')
+  const failedSales = sales.filter((sale) => sale.status === 'failed')
   const revenue = paidSales.reduce((sum, sale) => sum + sale.amount, 0)
   const selectedCurrency =
     accounts.find((account) => account.accountId === accountId)?.currency || 'EUR'
@@ -229,20 +270,28 @@ export default function SalesPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-4 gap-4 mb-6">
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
             <p className="text-gray-400 text-xs uppercase tracking-wide">Vendas pagas</p>
             <p className="text-3xl font-bold mt-2 text-green-400">{paidSales.length}</p>
+            <p className="text-xs text-gray-500 mt-2">Entram na receita real.</p>
           </div>
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
             <p className="text-gray-400 text-xs uppercase tracking-wide">Receita real</p>
             <p className="text-3xl font-bold mt-2 text-green-400">
               {formatMoney(revenue, selectedCurrency)}
             </p>
+            <p className="text-xs text-gray-500 mt-2">Soma apenas pagamentos pagos.</p>
+          </div>
+          <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+            <p className="text-gray-400 text-xs uppercase tracking-wide">Falhadas</p>
+            <p className="text-3xl font-bold mt-2 text-red-300">{failedSales.length}</p>
+            <p className="text-xs text-gray-500 mt-2">Nao entram na receita.</p>
           </div>
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
             <p className="text-gray-400 text-xs uppercase tracking-wide">Fonte principal</p>
-            <p className="text-xl font-bold mt-2">Checkout</p>
+            <p className="text-xl font-bold mt-2">Checkout real</p>
+            <p className="text-xs text-gray-500 mt-2">Stripe, Shopify, Payhip ou manual.</p>
           </div>
         </div>
 
@@ -310,18 +359,29 @@ export default function SalesPage() {
               </tr>
             </thead>
             <tbody>
-              {sales.map((sale) => (
-                <tr key={sale.id} className="border-t border-gray-800">
+              {sales.map((sale) => {
+                const cfg = statusConfig(sale.status)
+
+                return (
+                <tr key={sale.id} className="border-t border-gray-800 hover:bg-gray-800/30">
                   <td className="px-4 py-3">{sale.paidAt.slice(0, 10)}</td>
-                  <td className="px-4 py-3">{sale.status}</td>
-                  <td className="px-4 py-3">{sale.provider}</td>
+                  <td className="px-4 py-3">
+                    <span
+                      title={cfg.description}
+                      className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${cfg.className}`}
+                    >
+                      {cfg.label}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">{providerLabel(sale.provider)}</td>
                   <td className="px-4 py-3">{sale.customerEmail || '-'}</td>
                   <td className="px-4 py-3">{sale.productName || '-'}</td>
-                  <td className="px-4 py-3 font-semibold">
+                  <td className={`px-4 py-3 font-semibold ${sale.status === 'paid' ? 'text-green-300' : 'text-gray-300'}`}>
                     {formatMoney(sale.amount, sale.currency)}
                   </td>
                 </tr>
-              ))}
+                )
+              })}
 
               {sales.length === 0 && (
                 <tr>
