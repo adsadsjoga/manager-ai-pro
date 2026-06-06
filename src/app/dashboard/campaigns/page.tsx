@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   ArrowDownUp,
   ArrowLeft,
@@ -155,7 +155,7 @@ export default function CampaignsPage() {
     NonNullable<DashboardResponse['account']>['accounts']
   >([])
 
-  async function getCampaignsData(nextAccountId?: string) {
+  const getCampaignsData = useCallback(async (nextAccountId?: string) => {
     const res = await fetch(dashboardUrl(nextAccountId))
     const data = (await res.json()) as DashboardResponse
 
@@ -172,9 +172,9 @@ export default function CampaignsPage() {
     }
 
     return { data, nextCampaigns, nextAccountId }
-  }
+  }, [])
 
-  function applyCampaignsData(result: Awaited<ReturnType<typeof getCampaignsData>>) {
+  const applyCampaignsData = useCallback((result: Awaited<ReturnType<typeof getCampaignsData>>) => {
     if (!result) return
 
     setCampaigns(result.nextCampaigns)
@@ -186,7 +186,7 @@ export default function CampaignsPage() {
       window.localStorage.setItem(SELECTED_ACCOUNT_STORAGE_KEY, result.data.account.accountId)
     }
     setSelectedName(result.nextCampaigns[0]?.name || null)
-  }
+  }, [])
 
   useEffect(() => {
     let active = true
@@ -203,7 +203,7 @@ export default function CampaignsPage() {
     return () => {
       active = false
     }
-  }, [])
+  }, [applyCampaignsData, getCampaignsData])
 
   async function handleAccountChange(nextAccountId: string) {
     setLoading(true)

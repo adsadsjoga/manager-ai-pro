@@ -1,5 +1,5 @@
 import { summarizeCampaigns, type CampaignSummary } from '@/lib/campaign-metrics'
-import type { DailyMetric, MetaAd } from '@prisma/client'
+import type { BusinessProfile, DailyMetric, MetaAd } from '@prisma/client'
 
 type CreativeVideoMetrics = {
   avgWatchTime?: number
@@ -35,6 +35,12 @@ export type DiagnosisAction = {
 export type AccountDiagnosis = {
   healthScore: number
   summary: string
+  businessContext: {
+    businessName: string
+    objective: string
+    offer: string
+    targetAudience: string
+  } | null
   campaignDiagnosis: CampaignSummary[]
   creativeDiagnosis: CreativeDiagnosis[]
   actions: DiagnosisAction[]
@@ -96,6 +102,7 @@ function creativeRecommendation(ad: MetaAd) {
 export function buildAccountDiagnosis(params: {
   metrics: DailyMetric[]
   creatives: MetaAd[]
+  businessProfile?: BusinessProfile | null
 }): AccountDiagnosis {
   const campaigns = summarizeCampaigns(params.metrics).sort((a, b) => b.spend - a.spend)
   const creatives: CreativeDiagnosis[] = params.creatives
@@ -115,6 +122,7 @@ export function buildAccountDiagnosis(params: {
     .sort((a, b) => a.score - b.score)
 
   const actions: DiagnosisAction[] = []
+  const profile = params.businessProfile
   const weakCampaign = campaigns.find((campaign) => campaign.spend >= 10 && campaign.health < 60)
   const strongCampaign = campaigns.find(
     (campaign) => campaign.ctr >= 4 && campaign.cpc <= 0.2 && campaign.spend > 0
@@ -130,6 +138,25 @@ export function buildAccountDiagnosis(params: {
       title: 'Revisar campanha com gasto e baixa saude',
       target: weakCampaign.name,
       reason: `Score ${weakCampaign.health}/100, CTR ${weakCampaign.ctr.toFixed(2)}% e CPC ${weakCampaign.cpc.toFixed(2)}.`,
+    })
+  }
+
+  if (profile && profile.monthlyGoal && profile.averageTicket) {
+    const neededSales = Math.ceil(profile.monthlyGoal / profile.averageTicket)
+    actions.push({
+      priority: 'medium',
+      title: 'Alinhar meta comercial com volume de vendas',
+      target: profile.businessName,
+      reason: `Para chegar a ${profile.monthlyGoal.toFixed(2)} de receita com ticket medio ${profile.averageTicket.toFixed(2)}, o negocio precisa de aproximadamente ${neededSales} vendas no periodo.`,
+    })
+  }
+
+  if (profile?.offer && weakCreative) {
+    actions.push({
+      priority: 'medium',
+      title: 'Reforcar oferta no criativo',
+      target: weakCreative.adName,
+      reason: `A oferta cadastrada e "${profile.offer}". Use isso como promessa principal nos primeiros segundos/copy.`,
     })
   }
 
@@ -181,7 +208,17 @@ export function buildAccountDiagnosis(params: {
 
   return {
     healthScore,
-    summary: `Analise combinou ${campaigns.length} campanhas e ${creatives.length} criativos. A conta esta com score geral ${healthScore}/100.`,
+    summary: profile
+      ? `Analise de ${profile.businessName} combinou ${campaigns.length} campanhas, ${creatives.length} criativos e o objetivo "${profile.mainObjective || 'nao informado'}". Score geral ${healthScore}/100.`
+      : `Analise combinou ${campaigns.length} campanhas e ${creatives.length} criativos. A conta esta com score geral ${healthScore}/100.`,
+    businessContext: profile
+      ? {
+          businessName: profile.businessName,
+          objective: profile.mainObjective || '',
+          offer: profile.offer || '',
+          targetAudience: profile.targetAudience || '',
+        }
+      : null,
     campaignDiagnosis: campaigns,
     creativeDiagnosis: creatives,
     actions,

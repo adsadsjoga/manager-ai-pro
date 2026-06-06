@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto'
-import type { AiInsight, DailyMetric } from '@prisma/client'
+import type { AiInsight, BusinessProfile, DailyMetric } from '@prisma/client'
 import { summarizeCampaigns } from '@/lib/campaign-metrics'
 
 export type ReportMetrics = {
@@ -81,6 +81,8 @@ export function buildReportHtml(params: {
   periodEnd: Date
   metrics: DailyMetric[]
   latestInsight?: AiInsight | null
+  businessProfile?: BusinessProfile | null
+  template?: string | null
 }) {
   const totals = summarizeReportMetrics(params.metrics)
   const campaigns = summarizeCampaigns(params.metrics)
@@ -88,6 +90,16 @@ export function buildReportHtml(params: {
     .slice(0, 8)
 
   const insight = params.latestInsight?.summary || 'Sem analise salva para este periodo.'
+  const profile = params.businessProfile
+  const template = params.template || 'executive'
+  const businessContext = profile
+    ? [
+        profile.offer ? `Oferta: ${profile.offer}` : null,
+        profile.targetAudience ? `Publico: ${profile.targetAudience}` : null,
+        profile.mainObjective ? `Objetivo: ${profile.mainObjective}` : null,
+        profile.monthlyGoal ? `Meta mensal: ${formatCurrency(profile.monthlyGoal, params.currency)}` : null,
+      ].filter(Boolean)
+    : []
 
   return `<!doctype html>
 <html lang="pt">
@@ -125,7 +137,7 @@ export function buildReportHtml(params: {
     <section class="header">
       <div>
         <h1>${escapeHtml(params.accountName)}</h1>
-        <p class="muted">Relatorio de performance gerado pelo Ads Manager AI Pro</p>
+        <p class="muted">Relatorio ${escapeHtml(template)} gerado pelo Ads Manager AI Pro</p>
       </div>
       <div>
         <p class="muted">Periodo</p>
@@ -146,6 +158,13 @@ export function buildReportHtml(params: {
 
     <h2>Analise automatica</h2>
     <div class="insight">${escapeHtml(insight)}</div>
+
+    ${
+      businessContext.length > 0
+        ? `<h2>Contexto do negocio</h2>
+    <div class="insight">${businessContext.map((item) => escapeHtml(String(item))).join('<br>')}</div>`
+        : ''
+    }
 
     <h2>Campanhas principais</h2>
     <table>

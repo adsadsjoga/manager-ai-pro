@@ -61,6 +61,13 @@ export async function GET(
     },
   })
 
+  const businessProfile = await prisma.businessProfile.findFirst({
+    where: {
+      userId: report.userId,
+      adAccountId: report.adAccountId || undefined,
+    },
+  })
+
   const scopedMetrics = metrics.filter(
     (item) => metricAccountId(item.rawData) === report.adAccount?.accountId
   )
@@ -72,6 +79,8 @@ export async function GET(
     periodEnd: report.periodEnd,
     metrics: scopedMetrics,
     latestInsight,
+    businessProfile,
+    template: report.format,
   })
 
   return new NextResponse(html, {

@@ -1,4 +1,5 @@
 import type { CampaignSummary } from '@/lib/campaign-metrics'
+import type { BusinessProfile } from '@prisma/client'
 
 export type CampaignRecommendation = {
   campaign: string
@@ -16,6 +17,13 @@ export type BudgetForecast = {
   expectedClicks: number
   expectedPurchases: number
   note: string
+}
+
+export type BusinessRecommendation = {
+  priority: 'high' | 'medium' | 'low'
+  title: string
+  reason: string
+  action: string
 }
 
 function recommendationForCampaign(campaign: CampaignSummary): CampaignRecommendation {
@@ -109,4 +117,68 @@ export function buildBudgetForecast(campaigns: CampaignSummary[], daysWithData: 
         ? 'Ha campanhas com sinal para escala leve. A previsao adiciona 15% sobre a tendencia atual.'
         : 'Sem campanha forte para escala. A previsao mantem a tendencia atual ate ganhar mais sinal.',
   }
+}
+
+export function buildBusinessRecommendations(params: {
+  profile: BusinessProfile | null
+  campaigns: CampaignSummary[]
+}): BusinessRecommendation[] {
+  const { profile, campaigns } = params
+  const recommendations: BusinessRecommendation[] = []
+  const spend = campaigns.reduce((sum, campaign) => sum + campaign.spend, 0)
+  const purchases = campaigns.reduce((sum, campaign) => sum + campaign.purchases, 0)
+  const revenue = campaigns.reduce((sum, campaign) => sum + campaign.revenue, 0)
+  const bestCampaign = campaigns
+    .filter((campaign) => campaign.spend > 0)
+    .sort((a, b) => b.health - a.health)[0]
+
+  if (!profile) {
+    return [
+      {
+        priority: 'high',
+        title: 'Cadastrar perfil do negocio',
+        reason: 'A IA ainda nao sabe oferta, publico, ticket e objetivo. A analise fica mais generica.',
+        action: 'Preencher a pagina Perfil do negocio antes da proxima analise.',
+      },
+    ]
+  }
+
+  if (!profile.offer || !profile.targetAudience) {
+    recommendations.push({
+      priority: 'high',
+      title: 'Completar oferta e publico-alvo',
+      reason: 'Sem oferta e publico claros, a IA nao consegue avaliar se o criativo conversa com a promessa certa.',
+      action: 'Adicionar promessa principal, publico e objeções do cliente no perfil do negocio.',
+    })
+  }
+
+  if (profile.monthlyGoal && revenue < profile.monthlyGoal && spend > 0) {
+    recommendations.push({
+      priority: 'medium',
+      title: 'Comparar meta com receita real',
+      reason: `A meta cadastrada e ${profile.monthlyGoal.toFixed(2)} e a receita atribuida no periodo esta em ${revenue.toFixed(2)}.`,
+      action: 'Usar vendas reais como fonte principal e revisar oferta/campanhas com maior gasto.',
+    })
+  }
+
+  if (profile.averageTicket && purchases > 0) {
+    const estimatedRevenue = purchases * profile.averageTicket
+    recommendations.push({
+      priority: 'low',
+      title: 'Validar ticket medio',
+      reason: `Com ${purchases} compra(s) e ticket medio ${profile.averageTicket.toFixed(2)}, a receita esperada seria ${estimatedRevenue.toFixed(2)}.`,
+      action: 'Conferir Stripe/Payhip/Shopify para validar se o ticket cadastrado ainda esta correto.',
+    })
+  }
+
+  if (bestCampaign) {
+    recommendations.push({
+      priority: 'medium',
+      title: 'Usar melhor campanha como referencia',
+      reason: `${bestCampaign.name} tem o melhor score relativo dentro da conta.`,
+      action: 'Criar variações do criativo/oferta dessa campanha antes de aumentar escala.',
+    })
+  }
+
+  return recommendations
 }

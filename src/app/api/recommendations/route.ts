@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
 import { summarizeCampaigns } from '@/lib/campaign-metrics'
 import {
+  buildBusinessRecommendations,
   buildBudgetForecast,
   buildCampaignRecommendations,
 } from '@/lib/recommendation-engine'
@@ -46,8 +47,18 @@ export async function GET(req: Request) {
     where: { adAccountId: account.id },
     orderBy: { date: 'asc' },
   })
+  const businessProfile = await prisma.businessProfile.findFirst({
+    where: {
+      userId,
+      adAccountId: account.id,
+    },
+  })
   const campaigns = summarizeCampaigns(metrics)
   const recommendations = buildCampaignRecommendations(campaigns)
+  const businessRecommendations = buildBusinessRecommendations({
+    profile: businessProfile,
+    campaigns,
+  })
   const forecast = buildBudgetForecast(
     campaigns,
     daysWithData(metrics.map((metric) => metric.date))
@@ -56,8 +67,10 @@ export async function GET(req: Request) {
   return NextResponse.json({
     success: true,
     recommendations,
+    businessRecommendations,
     forecast,
     campaigns,
+    businessProfile,
     account: {
       accountId: account.accountId,
       accountName: account.accountName,

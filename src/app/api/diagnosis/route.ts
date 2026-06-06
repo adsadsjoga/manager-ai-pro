@@ -85,8 +85,14 @@ export async function POST(req: Request) {
     where: { adAccountId: account.id },
     orderBy: { updatedAt: 'desc' },
   })
+  const businessProfile = await prisma.businessProfile.findFirst({
+    where: {
+      userId,
+      adAccountId: account.id,
+    },
+  })
 
-  const diagnosis = buildAccountDiagnosis({ metrics, creatives })
+  const diagnosis = buildAccountDiagnosis({ metrics, creatives, businessProfile })
   const periodEnd = new Date()
   const periodStart = new Date(periodEnd.getTime() - 30 * 86400000)
 

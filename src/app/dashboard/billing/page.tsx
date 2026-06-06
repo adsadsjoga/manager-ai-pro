@@ -36,6 +36,12 @@ function limitLabel(value: number) {
   return String(value)
 }
 
+function usagePercent(current: number, limit: number) {
+  if (limit === -1) return 12
+  if (limit <= 0) return current > 0 ? 100 : 0
+  return Math.min(100, Math.round((current / limit) * 100))
+}
+
 export default function BillingPage() {
   const [status, setStatus] = useState<BillingStatus | null>(null)
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null)
@@ -145,6 +151,38 @@ export default function BillingPage() {
           <div className="mb-6 rounded-lg border border-yellow-700/50 bg-yellow-900/20 px-4 py-3 text-sm text-yellow-200">
             Configure STRIPE_SECRET_KEY e os Price IDs para ativar checkout real.
           </div>
+        )}
+
+        {status.plan && status.usage && (
+          <section className="mb-6 grid grid-cols-2 gap-4">
+            {[
+              {
+                label: 'Contas de anuncio',
+                current: status.usage.accounts,
+                limit: status.plan.limits.accounts,
+              },
+              {
+                label: 'Clientes',
+                current: status.usage.clients,
+                limit: status.plan.limits.clients,
+              },
+            ].map((item) => (
+              <div key={item.label} className="rounded-xl border border-gray-800 bg-gray-900 p-5">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm text-gray-400">{item.label}</p>
+                  <p className="font-semibold">
+                    {item.current} / {limitLabel(item.limit)}
+                  </p>
+                </div>
+                <div className="mt-4 h-2 overflow-hidden rounded-full bg-gray-800">
+                  <div
+                    className="h-full rounded-full bg-indigo-500"
+                    style={{ width: `${usagePercent(item.current, item.limit)}%` }}
+                  />
+                </div>
+              </div>
+            ))}
+          </section>
         )}
 
         <div className="grid grid-cols-4 gap-4">

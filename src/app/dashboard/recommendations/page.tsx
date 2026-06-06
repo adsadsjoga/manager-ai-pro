@@ -33,9 +33,17 @@ type Forecast = {
   note: string
 }
 
+type BusinessRecommendation = {
+  priority: 'high' | 'medium' | 'low'
+  title: string
+  reason: string
+  action: string
+}
+
 type RecommendationsResponse = {
   success: boolean
   recommendations?: Recommendation[]
+  businessRecommendations?: BusinessRecommendation[]
   forecast?: Forecast | null
   account?: {
     accountId: string
@@ -109,6 +117,7 @@ export default function RecommendationsPage() {
   const [accountName, setAccountName] = useState('Conta Facebook')
   const [currency, setCurrency] = useState('EUR')
   const [recommendations, setRecommendations] = useState<Recommendation[]>([])
+  const [businessRecommendations, setBusinessRecommendations] = useState<BusinessRecommendation[]>([])
   const [forecast, setForecast] = useState<Forecast | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -124,6 +133,7 @@ export default function RecommendationsPage() {
     }
 
     setRecommendations(data.recommendations || [])
+    setBusinessRecommendations(data.businessRecommendations || [])
     setForecast(data.forecast || null)
     setAccountName(data.account?.accountName || 'Conta Facebook')
     setCurrency(data.account?.currency || 'EUR')
@@ -284,6 +294,35 @@ export default function RecommendationsPage() {
             <p className="text-sm text-indigo-100">{forecast.note}</p>
           </div>
         )}
+
+        <section className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden mb-6">
+          <div className="px-6 py-4 border-b border-gray-800 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <Brain size={18} className="text-purple-300" />
+              <h2 className="font-semibold">Acoes do negocio</h2>
+            </div>
+            <a href="/dashboard/business" className="text-sm text-indigo-300 hover:text-indigo-200">
+              Editar perfil
+            </a>
+          </div>
+
+          <div className="divide-y divide-gray-800">
+            {businessRecommendations.map((item) => (
+              <div key={`${item.title}-${item.action}`} className="p-5 grid grid-cols-[140px_minmax(0,1fr)] gap-4">
+                <div>
+                  <span className={`text-xs px-2 py-1 rounded-full ${priorityTone(item.priority)}`}>
+                    {item.priority}
+                  </span>
+                </div>
+                <div>
+                  <h3 className="font-semibold">{item.title}</h3>
+                  <p className="text-sm text-gray-400 mt-1">{item.reason}</p>
+                  <p className="text-sm text-gray-200 mt-3">{item.action}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
 
         <section className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-800 flex items-center gap-2">

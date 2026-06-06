@@ -1,6 +1,9 @@
 import Link from 'next/link'
 
 const setupItems = [
+  'Preencher Perfil do negocio para a IA entender oferta, publico, ticket e objetivo.',
+  'Conectar ao menos uma conta Meta/Facebook e sincronizar dados reais.',
+  'Configurar Vendas reais para usar Stripe/Payhip/manual como fonte financeira principal.',
   'Criar conta Stripe e ativar o modo live quando for vender.',
   'Criar produtos Starter, Pro e Agency no Stripe.',
   'Copiar os Price IDs para STRIPE_PRICE_STARTER, STRIPE_PRICE_PRO e STRIPE_PRICE_AGENCY.',
@@ -9,6 +12,16 @@ const setupItems = [
   'Configurar domínio e NEXT_PUBLIC_APP_URL com a URL final.',
   'Revisar textos de oferta, termos, política de privacidade e suporte.',
   'Testar compra real com cartão de teste antes de publicar.',
+]
+
+const productBlocks = [
+  '1. Dados confiaveis: Meta para midia e vendas reais para receita.',
+  '2. Perfil do negocio: base da IA para analisar cada cliente com contexto.',
+  '3. Diagnostico IA: resumo do que esta bom, ruim e prioritario.',
+  '4. Recomendacoes: acoes praticas por campanha e por negocio.',
+  '5. Relatorios: modelos executivo, agencia e detalhado.',
+  '6. Multi-cliente: cada cliente/conta separado por dados e limites.',
+  '7. Billing e onboarding: planos, progresso de ativacao e checklist comercial.',
 ]
 
 const webhookEvents = [
@@ -40,6 +53,17 @@ export default function DocsPage() {
                 <input type="checkbox" className="mt-1" />
                 {item}
               </label>
+            ))}
+          </div>
+        </section>
+
+        <section className="bg-gray-900 border border-gray-800 rounded-xl p-6 mb-6">
+          <h2 className="font-semibold mb-4">Blocos do produto</h2>
+          <div className="grid gap-2">
+            {productBlocks.map((item) => (
+              <div key={item} className="rounded-lg bg-gray-800 px-3 py-2 text-sm text-gray-300">
+                {item}
+              </div>
             ))}
           </div>
         </section>

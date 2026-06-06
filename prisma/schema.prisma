@@ -25,6 +25,7 @@ model User {
   reports     Report[]
   leads       Lead[]
   realSales   RealSale[]
+  businessProfiles BusinessProfile[]
   shopifyStores ShopifyStore[]
   shopifyProducts ShopifyProduct[]
   shopifyOrders ShopifyOrder[]
@@ -48,6 +49,7 @@ model Client {
   reports    Report[]
   leads      Lead[]
   realSales  RealSale[]
+  businessProfiles BusinessProfile[]
 }
 
 model AdAccount {
@@ -76,11 +78,40 @@ model AdAccount {
   leads        Lead[]
   metaAds      MetaAd[]
   realSales    RealSale[]
+  businessProfiles BusinessProfile[]
   shopifyStores ShopifyStore[]
   shopifyProducts ShopifyProduct[]
   shopifyOrders ShopifyOrder[]
 
   @@unique([userId, platform, accountId])
+}
+
+model BusinessProfile {
+  id             String   @id @default(uuid())
+  userId         String
+  clientId       String?
+  adAccountId    String?
+  businessName   String
+  offer          String?
+  targetAudience String?
+  country        String?
+  language       String   @default("pt-BR")
+  averageTicket  Float?
+  marginPercent  Float?
+  monthlyGoal    Float?
+  mainObjective  String?
+  brandTone      String?
+  websiteUrl     String?
+  notes          String?
+  aiContext      Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  client    Client?    @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  adAccount AdAccount? @relation(fields: [adAccountId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, adAccountId])
 }
 
 model DailyMetric {

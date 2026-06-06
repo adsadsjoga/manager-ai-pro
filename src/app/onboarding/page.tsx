@@ -39,6 +39,14 @@ const setupSteps: Step[] = [
     countLabel: (counts) => `${counts.syncedAccounts || 0} sincronizada(s)`,
   },
   {
+    id: 'businessProfile',
+    title: 'Perfil do negocio',
+    text: 'Descreva oferta, publico, ticket, margem e objetivo para a IA analisar melhor.',
+    href: '/dashboard/business',
+    action: 'Preencher perfil',
+    countLabel: (counts) => `${counts.businessProfiles || 0} perfil(is)`,
+  },
+  {
     id: 'realSales',
     title: 'Vendas reais',
     text: 'Use Stripe, Payhip ou vendas manuais como fonte financeira confiavel.',

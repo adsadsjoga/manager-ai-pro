@@ -22,6 +22,7 @@ export async function GET() {
     metaAds,
     clients,
     reports,
+    businessProfiles,
   ] = await Promise.all([
     prisma.adAccount.count({ where: { userId, windsorConnected: true } }),
     prisma.adAccount.count({ where: { userId, syncStatus: 'success' } }),
@@ -40,6 +41,7 @@ export async function GET() {
     }),
     prisma.client.count({ where: { userId, isActive: true } }),
     prisma.report.count({ where: { userId } }),
+    prisma.businessProfile.count({ where: { userId } }),
   ])
 
   const checks = {
@@ -51,6 +53,7 @@ export async function GET() {
     shopifySynced: shopifyProducts > 0 || shopifyOrders > 0,
     metaCreatives: metaAds > 0,
     clients: clients > 0,
+    businessProfile: businessProfiles > 0,
     reports: reports > 0,
     aiConfigured: Boolean(process.env.ANTHROPIC_API_KEY),
     stripeConfigured: Boolean(process.env.STRIPE_SECRET_KEY),
@@ -76,6 +79,7 @@ export async function GET() {
       metaAds,
       clients,
       reports,
+      businessProfiles,
     },
   })
 }

@@ -45,6 +45,21 @@ const typeConfig: Record<string, { label: string; color: string; bg: string; ico
   custom: { label: 'Customizado', color: 'text-yellow-400', bg: 'bg-yellow-500/20', icon: 'C' },
 }
 
+const templateConfig = {
+  executive: {
+    label: 'Executivo',
+    text: 'Resumo curto para decisao rapida.',
+  },
+  agency: {
+    label: 'Agencia',
+    text: 'Mais contexto para enviar ao cliente.',
+  },
+  detailed: {
+    label: 'Detalhado',
+    text: 'Mais explicacao para analise interna.',
+  },
+}
+
 const SELECTED_ACCOUNT_STORAGE_KEY = 'ads-manager:selected-account-id'
 
 function formatDate(value: string | null) {
@@ -72,6 +87,7 @@ export default function ReportsPage() {
   const [generating, setGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selectedType, setSelectedType] = useState('weekly')
+  const [selectedTemplate, setSelectedTemplate] = useState<keyof typeof templateConfig>('executive')
   const [dateFrom, setDateFrom] = useState('2025-06-01')
   const [dateTo, setDateTo] = useState('2025-06-30')
   const [accountId, setAccountId] = useState('')
@@ -128,6 +144,7 @@ export default function ReportsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           reportType: selectedType,
+          template: selectedTemplate,
           dateFrom,
           dateTo,
           accountId,
@@ -281,6 +298,28 @@ export default function ReportsPage() {
                 </p>
               </div>
 
+              <div>
+                <label className="text-xs text-gray-400 uppercase tracking-wide block mb-2">
+                  Modelo
+                </label>
+                <div className="space-y-2">
+                  {Object.entries(templateConfig).map(([key, config]) => (
+                    <button
+                      key={key}
+                      onClick={() => setSelectedTemplate(key as keyof typeof templateConfig)}
+                      className={`w-full rounded-lg border px-3 py-2 text-left text-xs transition-colors ${
+                        selectedTemplate === key
+                          ? 'border-indigo-500 bg-indigo-600 text-white'
+                          : 'border-gray-700 text-gray-300 hover:border-gray-500'
+                      }`}
+                    >
+                      <strong className="block">{config.label}</strong>
+                      <span className="text-gray-300">{config.text}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <button
                 onClick={handleGenerate}
                 disabled={generating || !accountId}
@@ -298,6 +337,9 @@ export default function ReportsPage() {
                 <p className="text-gray-400 text-sm mt-1">
                   {activeType.label} de {formatDate(`${dateFrom}T00:00:00.000Z`)} ate{' '}
                   {formatDate(`${dateTo}T00:00:00.000Z`)}
+                </p>
+                <p className="text-gray-500 text-xs mt-1">
+                  Modelo {templateConfig[selectedTemplate].label} com contexto do perfil do negocio.
                 </p>
               </div>
               <span className={`px-3 py-1 rounded-full text-xs font-medium ${activeType.bg} ${activeType.color}`}>

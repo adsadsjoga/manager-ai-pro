@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 
 type ReportBody = {
   reportType?: string
+  template?: string
   dateFrom?: string
   dateTo?: string
   accountId?: string
@@ -132,6 +133,7 @@ export async function POST(req: Request) {
   }
 
   const type = body.reportType || 'custom'
+  const template = body.template || 'executive'
   const report = await prisma.report.create({
     data: {
       userId,
@@ -140,7 +142,7 @@ export async function POST(req: Request) {
         .toISOString()
         .slice(0, 10)}`,
       reportType: type,
-      format: 'html-pdf',
+      format: template,
       periodStart,
       periodEnd,
       status: 'ready',
