@@ -1,8 +1,21 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #060b18;
+  --foreground: #eef4ff;
+  --app-bg: #060b18;
+  --app-bg-soft: #0a1020;
+  --app-sidebar: #0b1324;
+  --app-panel: #111a2d;
+  --app-panel-soft: #182338;
+  --app-border: #263551;
+  --app-border-soft: #1d2a43;
+  --app-muted: #91a2bd;
+  --app-accent: #6d5dfc;
+  --app-accent-2: #24d7ff;
+  --app-success: #20e085;
+  --app-warning: #ffd23f;
+  --app-danger: #ff6070;
 }
 
 @theme inline {
@@ -14,8 +27,8 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #060b18;
+    --foreground: #eef4ff;
   }
 }
 
@@ -23,4 +36,119 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+* {
+  scrollbar-color: #334463 #08101f;
+}
+
+::selection {
+  background: rgba(109, 93, 252, 0.35);
+  color: #ffffff;
+}
+
+.bg-gray-950 {
+  background-color: var(--app-bg);
+}
+
+.bg-gray-900 {
+  background-color: var(--app-panel);
+}
+
+.bg-gray-800 {
+  background-color: var(--app-panel-soft);
+}
+
+.border-gray-800 {
+  border-color: var(--app-border-soft);
+}
+
+.border-gray-700 {
+  border-color: var(--app-border);
+}
+
+.text-gray-400 {
+  color: var(--app-muted);
+}
+
+.bg-indigo-600 {
+  background-color: var(--app-accent);
+}
+
+.hover\:bg-indigo-700:hover {
+  background-color: #5b4ee6;
+}
+
+.text-indigo-300,
+.text-indigo-400 {
+  color: #8ea2ff;
+}
+
+.rounded-xl {
+  border-radius: 18px;
+}
+
+.rounded-lg {
+  border-radius: 12px;
+}
+
+.ml-64 {
+  margin-left: 280px;
+}
+
+input,
+select,
+textarea,
+button {
+  font: inherit;
+}
+
+input,
+select,
+textarea {
+  background-color: #172238;
+}
+
+.dashboard-shell {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top left, rgba(109, 93, 252, 0.14), transparent 30rem),
+    radial-gradient(circle at 80% 10%, rgba(36, 215, 255, 0.08), transparent 28rem),
+    var(--app-bg);
+  color: var(--foreground);
+}
+
+.dashboard-main {
+  margin-left: 280px;
+  padding: 32px;
+}
+
+.dashboard-card {
+  border: 1px solid var(--app-border-soft);
+  background: linear-gradient(180deg, rgba(23, 35, 58, 0.98), rgba(15, 24, 43, 0.98));
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.22);
+}
+
+.dashboard-card-subtle {
+  border: 1px solid rgba(84, 103, 140, 0.28);
+  background: rgba(24, 35, 56, 0.82);
+}
+
+.dashboard-button {
+  border-radius: 12px;
+  background: linear-gradient(135deg, #6d5dfc, #8b5cf6);
+  color: white;
+  box-shadow: 0 12px 30px rgba(109, 93, 252, 0.24);
+}
+
+@media (max-width: 900px) {
+  .ml-64 {
+    margin-left: 0;
+  }
+
+  .dashboard-main {
+    margin-left: 0;
+    padding: 20px;
+    padding-bottom: 96px;
+  }
 }
