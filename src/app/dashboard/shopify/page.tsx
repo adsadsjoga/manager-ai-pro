@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { DashboardSidebar } from '@/components/dashboard-sidebar'
 
 type AdAccountItem = {
   accountId: string
@@ -314,34 +315,7 @@ export default function ShopifyPage() {
 
   return (
     <div className="min-h-screen bg-gray-950 text-white">
-      <div className="fixed left-0 top-0 h-full w-64 bg-gray-900 border-r border-gray-800 p-6">
-        <div className="text-xl font-bold text-indigo-400 mb-8">Ads Manager AI</div>
-        <nav className="space-y-1">
-          {[
-            { label: 'Dashboard', href: '/dashboard' },
-            { label: 'Campanhas', href: '/dashboard/campaigns' },
-            { label: 'Vendas reais', href: '/dashboard/sales' },
-            { label: 'Criativos', href: '/dashboard/creatives' },
-            { label: 'Shopify', href: '/dashboard/shopify', active: true },
-            { label: 'Diagnostico IA', href: '/dashboard/diagnosis' },
-            { label: 'Recomendacoes', href: '/dashboard/recommendations' },
-            { label: 'Alertas', href: '/dashboard/alerts' },
-            { label: 'Relatorios', href: '/dashboard/reports' },
-            { label: 'CRM', href: '/dashboard/crm' },
-            { label: 'Configuracoes', href: '/dashboard/settings' },
-          ].map((item) => (
-            <a
-              key={item.href}
-              href={item.href}
-              className={`block px-4 py-2.5 rounded-lg text-sm font-medium ${
-                item.active ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:bg-gray-800'
-              }`}
-            >
-              {item.label}
-            </a>
-          ))}
-        </nav>
-      </div>
+      <DashboardSidebar active="shopify" />
 
       <main className="ml-64 p-8">
         <div className="mb-8 flex items-start justify-between gap-4">

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { DashboardSidebar } from '@/components/dashboard-sidebar'
 
 type AdAccountItem = {
   accountId: string
@@ -32,6 +33,9 @@ type AccountsResponse = {
 type ProfileResponse = {
   success: boolean
   profile?: BusinessProfile | null
+  account?: {
+    currency: string
+  } | null
   error?: string
 }
 
@@ -43,6 +47,7 @@ const emptyForm = {
   targetAudience: '',
   country: 'Portugal',
   language: 'pt-BR',
+  currency: 'EUR',
   averageTicket: '',
   marginPercent: '',
   monthlyGoal: '',
@@ -50,6 +55,20 @@ const emptyForm = {
   brandTone: '',
   websiteUrl: '',
   notes: '',
+}
+
+function FieldLabel({ label, help }: { label: string; help: string }) {
+  return (
+    <span className="flex items-center gap-1 text-xs uppercase text-gray-400">
+      {label}
+      <span
+        title={help}
+        className="inline-flex h-4 w-4 cursor-help items-center justify-center rounded-full border border-gray-600 text-[10px] text-gray-400"
+      >
+        ?
+      </span>
+    </span>
+  )
 }
 
 export default function BusinessProfilePage() {
@@ -77,6 +96,7 @@ export default function BusinessProfilePage() {
         targetAudience: data.profile.targetAudience || '',
         country: data.profile.country || 'Portugal',
         language: data.profile.language || 'pt-BR',
+        currency: data.account?.currency || 'EUR',
         averageTicket: data.profile.averageTicket?.toString() || '',
         marginPercent: data.profile.marginPercent?.toString() || '',
         monthlyGoal: data.profile.monthlyGoal?.toString() || '',
@@ -86,7 +106,7 @@ export default function BusinessProfilePage() {
         notes: data.profile.notes || '',
       })
     } else {
-      setForm(emptyForm)
+      setForm({ ...emptyForm, currency: data.account?.currency || 'EUR' })
     }
   }
 
@@ -159,30 +179,7 @@ export default function BusinessProfilePage() {
 
   return (
     <div className="min-h-screen bg-gray-950 text-white">
-      <div className="fixed left-0 top-0 h-full w-64 bg-gray-900 border-r border-gray-800 p-6">
-        <div className="text-xl font-bold text-indigo-400 mb-8">Ads Manager AI</div>
-        <nav className="space-y-1">
-          {[
-            { label: 'Dashboard', href: '/dashboard' },
-            { label: 'Campanhas', href: '/dashboard/campaigns' },
-            { label: 'Perfil do negocio', href: '/dashboard/business', active: true },
-            { label: 'Diagnostico IA', href: '/dashboard/diagnosis' },
-            { label: 'Recomendacoes', href: '/dashboard/recommendations' },
-            { label: 'Relatorios', href: '/dashboard/reports' },
-            { label: 'Configuracoes', href: '/dashboard/settings' },
-          ].map((item) => (
-            <a
-              key={item.href}
-              href={item.href}
-              className={`block px-4 py-2.5 rounded-lg text-sm font-medium ${
-                item.active ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:bg-gray-800'
-              }`}
-            >
-              {item.label}
-            </a>
-          ))}
-        </nav>
-      </div>
+      <DashboardSidebar active="business" />
 
       <main className="ml-64 p-8">
         <div className="mb-8 flex items-start justify-between gap-4">
@@ -221,17 +218,14 @@ export default function BusinessProfilePage() {
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
             <div className="grid grid-cols-2 gap-4">
               {[
-                ['businessName', 'Nome do negocio', 'Ex: Retro Mundial'],
-                ['offer', 'Oferta principal', 'Ex: Camisas retro de futebol'],
-                ['targetAudience', 'Publico-alvo', 'Ex: Homens 25-44 apaixonados por futebol'],
-                ['country', 'Pais/mercado', 'Portugal'],
-                ['averageTicket', 'Ticket medio', '13.97'],
-                ['marginPercent', 'Margem (%)', '45'],
-                ['monthlyGoal', 'Meta mensal de receita', '3000'],
-                ['websiteUrl', 'Site', 'https://...'],
-              ].map(([key, label, placeholder]) => (
+                ['businessName', 'Nome do negocio', 'Ex: Retro Mundial', 'Nome que aparece nos relatorios e analises.'],
+                ['offer', 'Oferta principal', 'Ex: Camisas retro de futebol', 'O que a empresa vende em uma frase simples.'],
+                ['targetAudience', 'Publico-alvo', 'Ex: Homens 25-44 apaixonados por futebol', 'Quem compra ou deveria comprar esta oferta.'],
+                ['country', 'Pais/mercado', 'Portugal', 'Pais ou regiao principal onde voce vende.'],
+                ['websiteUrl', 'Site', 'https://...', 'Pagina principal da loja ou oferta.'],
+              ].map(([key, label, placeholder, help]) => (
                 <label key={key} className="block">
-                  <span className="text-xs text-gray-400 uppercase">{label}</span>
+                  <FieldLabel label={label} help={help} />
                   <input
                     value={form[key as keyof typeof form]}
                     onChange={(event) => setForm({ ...form, [key]: event.target.value })}
@@ -242,7 +236,51 @@ export default function BusinessProfilePage() {
               ))}
 
               <label className="block">
-                <span className="text-xs text-gray-400 uppercase">Objetivo principal</span>
+                <FieldLabel
+                  label="Moeda"
+                  help="Moeda usada nos valores deste negocio. Assim voce coloca apenas o numero nos campos financeiros."
+                />
+                <select
+                  value={form.currency}
+                  onChange={(event) => setForm({ ...form, currency: event.target.value })}
+                  className="mt-2 w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm"
+                >
+                  <option value="EUR">Euro (EUR)</option>
+                  <option value="BRL">Real (BRL)</option>
+                  <option value="USD">Dolar (USD)</option>
+                  <option value="GBP">Libra (GBP)</option>
+                </select>
+              </label>
+
+              {[
+                ['averageTicket', 'Ticket medio', '13.97', 'Coloque apenas o valor medio de uma venda, sem moeda. Exemplo: 13.97'],
+                ['marginPercent', 'Margem (%)', '45', 'Percentual aproximado de lucro depois de custo do produto, taxas e operacao.'],
+                ['monthlyGoal', 'Meta mensal de receita', '3000', 'Quanto voce quer faturar por mes nesta conta. Coloque apenas numero.'],
+              ].map(([key, label, placeholder, help]) => (
+                <label key={key} className="block">
+                  <FieldLabel label={label} help={help} />
+                  <div className="mt-2 flex rounded-lg border border-gray-700 bg-gray-800 focus-within:border-indigo-500">
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      step="0.01"
+                      value={form[key as keyof typeof form]}
+                      onChange={(event) => setForm({ ...form, [key]: event.target.value })}
+                      placeholder={placeholder}
+                      className="w-full bg-transparent px-3 py-2 text-sm outline-none"
+                    />
+                    <span className="border-l border-gray-700 px-3 py-2 text-sm text-gray-400">
+                      {key === 'marginPercent' ? '%' : form.currency}
+                    </span>
+                  </div>
+                </label>
+              ))}
+
+              <label className="block">
+                <FieldLabel
+                  label="Objetivo principal"
+                  help="O que a IA deve priorizar ao analisar os anuncios."
+                />
                 <select
                   value={form.mainObjective}
                   onChange={(event) => setForm({ ...form, mainObjective: event.target.value })}
@@ -257,7 +295,10 @@ export default function BusinessProfilePage() {
               </label>
 
               <label className="block">
-                <span className="text-xs text-gray-400 uppercase">Tom da marca</span>
+                <FieldLabel
+                  label="Tom da marca"
+                  help="Estilo de comunicacao usado nos anuncios e relatorios."
+                />
                 <input
                   value={form.brandTone}
                   onChange={(event) => setForm({ ...form, brandTone: event.target.value })}
@@ -267,7 +308,10 @@ export default function BusinessProfilePage() {
               </label>
 
               <label className="block col-span-2">
-                <span className="text-xs text-gray-400 uppercase">Observacoes para a IA</span>
+                <FieldLabel
+                  label="Observacoes para a IA"
+                  help="Regras, diferenciais, promessas proibidas, objeções e contexto que a IA deve lembrar."
+                />
                 <textarea
                   value={form.notes}
                   onChange={(event) => setForm({ ...form, notes: event.target.value })}

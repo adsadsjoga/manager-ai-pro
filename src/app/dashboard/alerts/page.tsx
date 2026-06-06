@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { DashboardSidebar } from '@/components/dashboard-sidebar'
 
 type AlertSeverity = 'critical' | 'warning' | 'opportunity' | 'info'
 
@@ -175,42 +176,7 @@ export default function AlertsPage() {
 
   return (
     <div className="min-h-screen bg-gray-950 text-white">
-      <div className="fixed left-0 top-0 h-full w-64 bg-gray-900 border-r border-gray-800 p-6">
-        <div className="text-xl font-bold text-indigo-400 mb-8">Ads Manager AI</div>
-
-        <nav className="space-y-1">
-          {[
-            { label: 'Dashboard', href: '/dashboard' },
-            { label: 'Campanhas', href: '/dashboard/campaigns' },
-            { label: 'Vendas reais', href: '/dashboard/sales' },
-            { label: 'Criativos', href: '/dashboard/creatives' },
-            { label: 'Shopify', href: '/dashboard/shopify' },
-            { label: 'Diagnostico IA', href: '/dashboard/diagnosis' },
-            { label: 'Recomendacoes', href: '/dashboard/recommendations' },
-            { label: 'Alertas', href: '/dashboard/alerts', active: true },
-            { label: 'Relatorios', href: '/dashboard/reports' },
-            { label: 'CRM', href: '/dashboard/crm' },
-            { label: 'Configuracoes', href: '/dashboard/settings' },
-          ].map((item) => (
-            <a
-              key={item.href}
-              href={item.href}
-              className={`block px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                item.active
-                  ? 'bg-indigo-600 text-white'
-                  : 'text-gray-400 hover:bg-gray-800 hover:text-white'
-              }`}
-            >
-              {item.label}
-              {item.href === '/dashboard/alerts' && unreadCount > 0 && (
-                <span className="ml-2 bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full">
-                  {unreadCount}
-                </span>
-              )}
-            </a>
-          ))}
-        </nav>
-      </div>
+      <DashboardSidebar active="alerts" unreadAlerts={unreadCount} />
 
       <main className="ml-64 p-8">
         <div className="flex items-center justify-between mb-6">

@@ -13,6 +13,7 @@ type BusinessProfileBody = {
   averageTicket?: number | string
   marginPercent?: number | string
   monthlyGoal?: number | string
+  currency?: string
   mainObjective?: string
   brandTone?: string
   websiteUrl?: string
@@ -21,7 +22,7 @@ type BusinessProfileBody = {
 
 function parseNumber(value: number | string | undefined) {
   if (value === undefined || value === '') return null
-  const parsed = Number(value)
+  const parsed = Number(String(value).replace(',', '.'))
   return Number.isFinite(parsed) ? parsed : null
 }
 
@@ -93,6 +94,15 @@ export async function POST(req: Request) {
 
   const businessName =
     body.businessName?.trim() || account.accountName || 'Meu negocio'
+  const currency = body.currency?.trim().toUpperCase()
+
+  if (currency && ['EUR', 'BRL', 'USD', 'GBP'].includes(currency)) {
+    await prisma.adAccount.update({
+      where: { id: account.id },
+      data: { currency },
+    })
+  }
+
   const profile = await prisma.businessProfile.upsert({
     where: {
       userId_adAccountId: {

@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { DashboardSidebar } from '@/components/dashboard-sidebar'
 
 const setupItems = [
   'Preencher Perfil do negocio para a IA entender oferta, publico, ticket e objetivo.',
@@ -24,6 +25,40 @@ const productBlocks = [
   '7. Billing e onboarding: planos, progresso de ativacao e checklist comercial.',
 ]
 
+const stageStatus = [
+  {
+    title: 'Pronto para usar',
+    items: [
+      'Dashboard por conta de anuncio',
+      'Vendas reais como fonte financeira',
+      'Perfil do negocio para contexto da IA',
+      'Diagnostico IA e recomendacoes',
+      'Criativos Meta salvos no banco',
+      'Relatorios HTML imprimiveis',
+      'Onboarding de ativacao',
+    ],
+  },
+  {
+    title: 'Precisa configurar para vender',
+    items: [
+      'Stripe em modo live',
+      'Planos com Price IDs reais',
+      'Webhook de billing no Stripe',
+      'Dominio final quando comprar',
+      'Termos, privacidade e suporte',
+    ],
+  },
+  {
+    title: 'Deixar para depois',
+    items: [
+      'Shopify OAuth completo para clientes',
+      'Templates visuais finais do Figma',
+      'Token Meta permanente por cliente via OAuth',
+      'PDF nativo em vez de impressao do navegador',
+    ],
+  },
+]
+
 const webhookEvents = [
   'checkout.session.completed',
   'customer.subscription.created',
@@ -33,8 +68,9 @@ const webhookEvents = [
 
 export default function DocsPage() {
   return (
-    <main className="min-h-screen bg-gray-950 text-white p-8">
-      <div className="max-w-4xl mx-auto">
+    <main className="min-h-screen bg-gray-950 text-white">
+      <DashboardSidebar active="onboarding" />
+      <div className="ml-64 max-w-6xl p-8">
         <div className="mb-8">
           <Link href="/" className="text-indigo-300 text-sm">
             Ads Manager AI Pro
@@ -66,6 +102,21 @@ export default function DocsPage() {
               </div>
             ))}
           </div>
+        </section>
+
+        <section className="grid gap-4 mb-6 md:grid-cols-3">
+          {stageStatus.map((group) => (
+            <div key={group.title} className="rounded-xl border border-gray-800 bg-gray-900 p-5">
+              <h2 className="font-semibold mb-3">{group.title}</h2>
+              <div className="space-y-2">
+                {group.items.map((item) => (
+                  <div key={item} className="rounded-lg bg-gray-800 px-3 py-2 text-sm text-gray-300">
+                    {item}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
         </section>
 
         <section className="grid grid-cols-2 gap-4">

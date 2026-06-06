@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { DashboardSidebar } from '@/components/dashboard-sidebar'
 
 type OnboardingStatus = {
   success: boolean
@@ -198,8 +199,9 @@ export default function OnboardingPage() {
   const progress = status?.progress || 0
 
   return (
-    <main className="min-h-screen bg-gray-950 p-8 text-white">
-      <div className="mx-auto max-w-6xl">
+    <main className="min-h-screen bg-gray-950 text-white">
+      <DashboardSidebar active="onboarding" />
+      <div className="ml-64 p-8">
         <div className="mb-8 flex items-start justify-between gap-6">
           <div>
             <p className="text-sm font-medium text-indigo-300">Ads Manager AI Pro</p>

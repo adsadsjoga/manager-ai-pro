@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import Image from 'next/image'
+import { DashboardSidebar } from '@/components/dashboard-sidebar'
 
 type DashboardMetrics = {
   spend: number
@@ -449,48 +449,7 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-gray-950 text-white">
-      <div className="fixed left-0 top-0 h-full w-64 bg-gray-900 border-r border-gray-800 p-6">
-        <Image src="/logo.svg" alt="Ads Manager AI" width={220} height={48} className="mb-8" />
-
-        <nav className="space-y-1">
-          {[
-            { label: '📊 Dashboard', href: '/dashboard', active: true },
-            { label: '📣 Campanhas', href: '/dashboard/campaigns' },
-            { label: '💶 Vendas reais', href: '/dashboard/sales' },
-            { label: '🎬 Criativos', href: '/dashboard/creatives' },
-            { label: '🛒 Shopify', href: '/dashboard/shopify' },
-            { label: '🧠 Diagnóstico IA', href: '/dashboard/diagnosis' },
-            { label: '✅ Recomendações', href: '/dashboard/recommendations' },
-            { label: '🚀 Onboarding', href: '/onboarding' },
-            { label: '🔔 Alertas', href: '/dashboard/alerts' },
-            { label: '📄 Relatórios', href: '/dashboard/reports' },
-            { label: '👥 CRM', href: '/dashboard/crm' },
-            { label: '⚙️ Configurações', href: '/dashboard/settings' },
-          ].map((item) => (
-            <a
-              key={item.href}
-              href={item.href}
-              className={`block px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                item.active
-                  ? 'bg-indigo-600 text-white'
-                  : 'text-gray-400 hover:bg-gray-800 hover:text-white'
-              }`}
-            >
-              {item.label}
-            </a>
-          ))}
-        </nav>
-
-        <div className="absolute bottom-6 left-6 right-6">
-          <div className="bg-gray-800 rounded-lg p-3 text-xs text-gray-400">
-            <div className="font-medium text-white mb-1">{accountName}</div>
-            <div className="flex items-center gap-1">
-              <span className="w-2 h-2 bg-green-400 rounded-full inline-block"></span>
-              {dataSource === 'meta' ? 'Meta API conectada' : 'Windsor.ai conectado'}
-            </div>
-          </div>
-        </div>
-      </div>
+      <DashboardSidebar active="dashboard" />
 
       <div className="ml-64 p-8">
         <div className="flex items-center justify-between mb-8">
